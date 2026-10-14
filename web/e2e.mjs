@@ -1,4 +1,5 @@
 // The emulator and a passkey, end to end in Chrome: node web/e2e.mjs [screenshot.png]
+// E2E_URL=https://diykey.app/ runs it against the deployed site instead of this checkout.
 // Serves the repository on localhost, starts headless Chrome with a virtual WebAuthn authenticator
 // (the DevTools protocol's), and drives the page with real key presses: make a passkey, send a
 // transaction, page to the hash, sign, and check the signature verified; then a wrong claim, which
@@ -76,7 +77,7 @@ try {
   await page("Runtime.enable", {});
   const errors = [];
   ws.addEventListener("message", (e) => { const m = JSON.parse(e.data); if (m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text); });
-  await page("Page.navigate", { url: `http://localhost:${port}/web/` });
+  await page("Page.navigate", { url: process.env.E2E_URL || `http://localhost:${port}/web/` });
   await until('document.getElementById("t-fw").textContent.includes("emulator")', "the emulator");
   check(true, "the emulator loaded (WebAssembly, under the page's CSP)");
 

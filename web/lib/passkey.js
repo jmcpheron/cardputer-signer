@@ -104,6 +104,70 @@ export function safeSignature(authenticatorData, clientDataFields, r, s) {
     word(BigInt(a.length)), pad(a), word(BigInt(f.length)), pad(f)));
 }
 
+// ------------------------------------------------------------------ the public key, from signatures
+// WebAuthn hands out a passkey's public key only when the passkey is made. To use one made before
+// (in another browser, or synced to a phone), the page works the key out from two signatures: one
+// P-256 signature fits two public keys, and a second signature leaves the one that fits both. Plain
+// curve arithmetic in BigInt; web/test.mjs checks it with keys made in Node.
+
+const P = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffffn;
+const A = P - 3n;
+const B = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604bn;
+const G = [0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296n,
+  0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5n];
+const mod = (a, m) => ((a % m) + m) % m;
+function inv(a, m) {
+  let [x0, x1, r0, r1] = [0n, 1n, m, mod(a, m)];
+  while (r1) { const q = r0 / r1; [x0, x1] = [x1, x0 - q * x1]; [r0, r1] = [r1, r0 - q * r1]; }
+  return mod(x0, m);
+}
+function pow(b, e, m) { let r = 1n; for (b = mod(b, m); e > 0n; e >>= 1n, b = b * b % m) if (e & 1n) r = r * b % m; return r; }
+function add(p1, p2) {
+  if (!p1) return p2;
+  if (!p2) return p1;
+  const [x1, y1] = p1, [x2, y2] = p2;
+  let l;
+  if (x1 === x2) {
+    if (mod(y1 + y2, P) === 0n) return null;
+    l = mod((3n * x1 * x1 + A) * inv(2n * y1, P), P);
+  } else {
+    l = mod((y2 - y1) * inv(x2 - x1, P), P);
+  }
+  const x3 = mod(l * l - x1 - x2, P);
+  return [x3, mod(l * (x1 - x3) - y1, P)];
+}
+function mul(k, pt) { let r = null; for (let q = pt; k > 0n; k >>= 1n, q = add(q, q)) if (k & 1n) r = add(r, q); return r; }
+
+/** The public keys (x, y as bytes) that one assertion's signature fits: usually two. */
+export async function candidates({ authenticatorData, clientDataJSON, signature }) {
+  const z = big(await sha256(concat(authenticatorData, await sha256(clientDataJSON))));
+  const { r, s } = parseDer(signature);
+  const y2 = mod(r * r * r + A * r + B, P);
+  const y = pow(y2, (P + 1n) / 4n, P); // P = 3 mod 4
+  if (y * y % P !== y2) return [];
+  const ri = inv(r, N), out = [];
+  for (const R of [[r, y], [r, P - y]]) {
+    const Q = mul(ri, add(mul(s, R), mul(mod(-z, N), G)));
+    if (Q) out.push({ x: word(Q[0]), y: word(Q[1]) });
+  }
+  return out;
+}
+
+/** The one public key that fits two assertions from the same passkey, checked with WebCrypto. */
+export async function keyFrom(a1, a2) {
+  const c2 = (await candidates(a2)).map((k) => hex(k.x) + hex(k.y));
+  const both = (await candidates(a1)).filter((k) => c2.includes(hex(k.x) + hex(k.y)));
+  if (both.length !== 1) throw new Error("these signatures don't come from one key");
+  const k = both[0], key = await importKey(k.x, k.y);
+  for (const a of [a1, a2]) {
+    const { r, s } = parseDer(a.signature);
+    const ok = await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key, concat(word(r), word(s)),
+      concat(a.authenticatorData, await sha256(a.clientDataJSON)));
+    if (!ok) throw new Error("the recovered key doesn't verify");
+  }
+  return k;
+}
+
 // ------------------------------------------------------------------ the browser's side
 
 const STORE = "diykey.passkey";
@@ -154,6 +218,32 @@ export function sign(hash, key) {
     clientDataJSON: new Uint8Array(a.response.clientDataJSON),
     signature: new Uint8Array(a.response.signature),
   }));
+}
+
+const parts = (a) => ({
+  authenticatorData: new Uint8Array(a.response.authenticatorData),
+  clientDataJSON: new Uint8Array(a.response.clientDataJSON),
+  signature: new Uint8Array(a.response.signature),
+});
+
+/** Using a passkey made before, step 1: the browser lists this site's passkeys and the person picks
+ * one, which signs a random challenge. Call it from a tap. */
+export async function find() {
+  const a = await navigator.credentials.get({ publicKey: {
+    challenge: crypto.getRandomValues(new Uint8Array(32)), rpId: location.hostname, userVerification: "required",
+  } });
+  return { id: new Uint8Array(a.rawId), ...parts(a) };
+}
+
+/** Step 2, from a second tap (Safari asks for one per prompt): the same passkey signs once more,
+ * and the two signatures give its public key. */
+export async function confirm(found) {
+  const a = await navigator.credentials.get({ publicKey: {
+    challenge: crypto.getRandomValues(new Uint8Array(32)), rpId: location.hostname, userVerification: "required",
+    allowCredentials: [{ type: "public-key", id: found.id }],
+  } });
+  const k = await keyFrom(found, parts(a));
+  return remember({ id: hex(found.id), x: hex(k.x), y: hex(k.y) });
 }
 
 export { hex as toHex, fromHex };

@@ -26,6 +26,8 @@ pub struct ChipInfo {
     pub config_locked: bool,
     pub data_locked: bool,
     pub counter0: u32,
+    /// slot 0's public key, x ‖ y, when it has one
+    pub pubkey0: Option<[u8; 64]>,
 }
 
 #[derive(Clone, Copy)]

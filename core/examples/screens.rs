@@ -17,6 +17,7 @@ fn main() {
         config_locked: true,
         data_locked: false,
         counter0: 23,
+        pubkey0: None,
     });
     let mut buf = vec![0u8; (W * H * 2) as usize];
     let mut save = |name: &str, draw: &dyn Fn(&mut Frame)| {

@@ -7,21 +7,24 @@ export async function load(bytes) {
   const { instance } = await WebAssembly.instantiate(bytes, {});
   const x = instance.exports;
   const mem = () => new Uint8Array(x.memory.buffer);
-  const lines = (n) => new TextDecoder().decode(mem().slice(x.out_buf(), x.out_buf() + n)).split("\n").filter(Boolean);
+  // Ask for a buffer's address before taking the view: the first call into the wasm sets up its
+  // buffers and grows its memory, which leaves an older view of it empty.
+  const lines = (n) => { const at = x.out_buf(); return new TextDecoder().decode(mem().slice(at, at + n)).split("\n").filter(Boolean); };
   const w = x.width(), h = x.height();
   return {
     w, h,
     boot: () => lines(x.boot()),
     send(line) {
       const b = new TextEncoder().encode(line);
-      if (b.length <= x.line_cap()) mem().set(b, x.line_buf());
+      if (b.length <= x.line_cap()) { const at = x.line_buf(); mem().set(b, at); }
       return lines(x.submit(b.length));
     },
     key: (name) => lines(x.key(KEYS[name])),
     /** The passkey's credential id (hex), or null for none. */
     setPasskey(idHex) {
       const id = idHex ? Uint8Array.from(idHex.slice(0, 16).match(/../g), (v) => parseInt(v, 16)) : new Uint8Array();
-      mem().set(id, x.line_buf());
+      const at = x.line_buf();
+      mem().set(id, at);
       return lines(x.set_passkey(id.length));
     },
     signResult: (ok) => lines(x.sign_result(ok ? 1 : 0)),

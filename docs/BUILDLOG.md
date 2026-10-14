@@ -81,6 +81,35 @@ core gained a passkey key state, a Sign footer and a Signed screen, which the fi
 All 27 of the firmware's screens came out the same, byte for byte. The firmware image's hash
 changed (`06ec4ab9…`), from code layout; the board didn't need flashing.
 
+## 2026-10-14: the key's address, and the bench
+
+The firmware now reads slot 0's public key when it reads the chip (GenKey mode 0, which only works
+out the public key and changes nothing) and reports it as `chip: pubkey0 0x…`. A test pins the
+packet to `0307400000000005`, the bytes the MicroPython driver sends, and pins the mode at 0 for
+every slot: mode 0x04 would make a new key. Flashed from the page and run with a second chip on the
+Grove port (serial starting `01233859`): config and data zones open, and no key in slot 0, so the
+page shows no address. The first chip (`0123f3acfd2a826bee`) has a key in slot 0 from the
+MicroPython version, whose Safe signer address was `0x2843705391b7E2cf06b0b964b532Ad9891535E53`;
+not yet read with this firmware.
+
+The page shows the key that's attached and the address it signs as on chain (Safe's passkey signer
+for that key, [PASSKEY.md](PASSKEY.md)). `web/test.mjs` checks the address and the signature
+encoding against `vectors/webauthn.json`. The top of the page is now the bench, laid out as on the
+desk: the key, the Grove wires, the Cardputer with the live screen and a keyboard that works, and the
+USB cable into "this computer", where the transactions are picked and sent.
+
+The key is now the panel at the left, with its wires (or the browser's WebAuthn) drawn into the
+Grove port, and the Cardputer takes the space the drawing had: its screen is drawn at about 1:1 on a
+wide window. A bug found on the bench: with a passkey saved in the browser, the page stopped at
+startup and the Connect button did nothing. The emulator's first call sets up its buffers and grows
+its memory, and `web/lib/emu.js` had taken its view of memory before that call. Fixed, with a test
+in `web/test.mjs` and a reload step in `web/e2e.mjs`.
+
+Every line now runs along the cable as it goes: down the USB cable in blue, back up it in green,
+and over the key's wires when the signer reads its key. "This computer" shows what went down and
+what came back, with the cable plugged in between, and the two hashes and the signature sit in a
+band under the bench.
+
 ## Next
 
 - Milestone 3: hold to sign with the chip, over the hash the device worked out.

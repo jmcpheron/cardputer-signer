@@ -4,7 +4,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { load as loadEmu } from "./lib/emu.js";
 import { build } from "./lib/blockies.js";
 import { fields, hex, keccak256, safeTxHash, tamper, txLine } from "./lib/safe.js";
-import { b64url, parseAttestation, parseDer, safeSignature, verify } from "./lib/passkey.js";
+import { b64url, candidates, keyFrom, parseAttestation, parseDer, safeSignature, verify } from "./lib/passkey.js";
+import { checksum, signerAddress } from "./lib/signer.js";
 
 const load = (n) => JSON.parse(readFileSync(new URL(`../vectors/${n}`, import.meta.url)));
 let failed = 0;
@@ -81,6 +82,32 @@ const parsed = parseAttestation(Uint8Array.from(cb([["fmt", "none"], ["attStmt",
 check(hex(parsed.id) === hex(credId) && hex(parsed.x) === hex(x) && hex(parsed.y) === hex(y), "passkey: registration parsed");
 check(parseDer(der(5n, N - 1n)).s === N - 1n, "passkey: DER");
 
+// A passkey made before: its public key, worked out from two of its signatures.
+{
+  const a1 = await assertion(hash), a2 = await assertion(tamper(hash));
+  const c = await candidates(a1);
+  check(c.length === 2 && c.some((k) => hex(k.x) === hex(x) && hex(k.y) === hex(y)), "passkey: one signature fits two keys, ours among them");
+  const k = await keyFrom(a1, a2);
+  check(hex(k.x) === hex(x) && hex(k.y) === hex(y), "passkey: two signatures give its public key");
+  const other = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
+  const p1363 = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, other.privateKey, cat(a2.authenticatorData, await sha(a2.clientDataJSON))));
+  const forged = { ...a2, signature: der(big(p1363.slice(0, 32)), big(p1363.slice(32))) };
+  check(await keyFrom(a1, forged).then(() => false, () => true), "passkey: signatures from two keys give no key");
+}
+
+// The onchain signer: its address, and signatures Safe's contract accepted (vectors/webauthn.json).
+const wa = load("webauthn.json");
+for (const v of wa.vectors) {
+  check(signerAddress(v.qx, v.qy).toLowerCase() === v.owner.toLowerCase(), `signer address: ${v.name}`);
+  const ad = Buffer.from(v.authenticatorData.slice(2), "hex"), r = BigInt(v.r), s = BigInt(v.s);
+  check(safeSignature(new Uint8Array(ad), v.clientDataFields, r, s) === v.signature.toLowerCase(), `Safe signature encoding: ${v.name}`);
+  const got = await verify({ authenticatorData: new Uint8Array(ad), clientDataJSON: new TextEncoder().encode(v.clientDataJSON),
+    signature: der(r, s), x: Buffer.from(v.qx.slice(2), "hex"), y: Buffer.from(v.qy.slice(2), "hex"), hash: v.safeTxHash,
+    rpId: "picoquorum", origin: "picoquorum" });
+  check(got.checks.find(([k]) => k === "P-256 signature valid")[1] && got.checks[0][1], `an assertion Safe accepted verifies here: ${v.name}`);
+}
+check(checksum("0x2843705391b7e2cf06b0b964b532ad9891535e53") === "0x2843705391b7E2cf06b0b964b532Ad9891535E53", "EIP-55 checksum");
+
 // The emulator: the signer's core in WebAssembly, through its states.
 const wasm = new URL("emu/signer.wasm", import.meta.url);
 let emuNote = "emulator skipped (run web/build.sh)";
@@ -104,8 +131,15 @@ if (existsSync(wasm)) {
   check(emu.key("enter").length === 0 && emu.key("del")[0] === "= rejected", "emulator: a wrong claim can't be signed");
   emu.key("enter");
   check(emu.send("sign " + h)[0] === "= error unknown command", "emulator: no sign command over the line");
+  // A passkey saved in the browser: the page hands it over before anything else, as its first call.
+  const first = await loadEmu(readFileSync(wasm));
+  first.setPasskey("0123456789abcdef");
+  first.boot();
+  first.send(txLine(fields(v), h));
+  for (let i = 0; i < 6; i++) first.key("right");
+  check(first.key("enter")[0] === "= sign " + h, "emulator: a passkey set before boot");
   emuNote = `emulator (${vectors.length} hashes, signing rules)`;
 }
 
-console.log(failed ? `${failed} failed` : `ok: keccak, ${vectors.length} Safe hashes, ${blockies.length} blockies, passkey signatures, ${emuNote}`);
+console.log(failed ? `${failed} failed` : `ok: keccak, ${vectors.length} Safe hashes, ${blockies.length} blockies, passkey signatures, ${wa.vectors.length} Safe signer addresses and encodings, ${emuNote}`);
 process.exit(failed ? 1 : 0);

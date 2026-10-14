@@ -6,6 +6,7 @@ import { canvas as blockie } from "./lib/blockies.js";
 import { load as loadEmu } from "./lib/emu.js";
 import * as passkey from "./lib/passkey.js";
 import { fields, safeTxHash, tamper as tampered, txLine } from "./lib/safe.js";
+import { fingerprint, signerAddress } from "./lib/signer.js";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
@@ -25,6 +26,8 @@ const st = {
   mode: "emu", vectors: [], reviews: {}, sel: null, page: 0, tamper: false, filter: "all",
   port: null, reader: null, reading: null, lineBuf: "",
   emu: null, key: passkey.saved(), signing: false,
+  // what the signer has said about itself: { fw, chip: { model, serial, locks, counter }, pubkey, missing }
+  dev: {},
   pending: null, // { name, claimed, device, pages, done, signed }
   firmware: null, flashing: false,
 };
@@ -72,8 +75,8 @@ const signerName = () => (emuMode() ? "the emulator" : "the Cardputer");
 
 // ------------------------------------------------------------------ the mode
 const LEDE = {
-  emu: "Send a demo Safe transaction to the emulator: the Cardputer's own code, running in this page, with your passkey as its key. It rebuilds the transaction's hash from its fields, shows you what it does, and only compares the hash this page claims. Page through it, then Enter on the last page signs with your passkey. A wrong claim turns it red, and it won't sign.",
-  usb: "Send a demo Safe transaction to your Cardputer over USB. The Cardputer rebuilds the transaction's hash from its fields, shows you what it does, and only compares the hash this page claims. A wrong claim turns it red.",
+  emu: "The Cardputer below runs the real firmware's code, in this page, with your passkey as its key. Send it a demo Safe transaction: it works out the hash itself, shows you every page, and signs only that hash. Claim a wrong hash, and it turns red and won't sign.",
+  usb: "Plug in your Cardputer and send it a demo Safe transaction. It works out the hash itself, shows you every page on its own screen, and only compares the hash this page claims. A wrong claim turns it red.",
 };
 
 function setMode(m) {
@@ -82,42 +85,40 @@ function setMode(m) {
   for (const b of $("modes").children) b.classList.toggle("on", b.dataset.m === m);
   document.body.classList.toggle("is-emu", emu);
   $("lede").textContent = LEDE[m];
-  $("usb-label").textContent = emu ? "in this page" : "USB";
-  $("grove-label").textContent = emu ? "WebAuthn" : "Grove";
-  $("card-label").textContent = emu ? "Emulator" : "Cardputer";
-  $("chip-text").textContent = emu ? "P-256" : "608";
-  $("chip-label").textContent = emu ? "Your passkey" : "ATECC608";
-  $("chip-sub").textContent = emu ? "a virtual ATECC608: P-256, can't be exported" : "the key, made inside, never leaves";
+  const labels = emu
+    ? { "lab-wire": "WebAuthn",
+        "mini-key": "Passkey", "mini-wire": "WebAuthn", "pc-title": "This page · the emulator runs here" }
+    : { "lab-wire": "Grove",
+        "mini-key": "ATECC608", "mini-wire": "Grove", "pc-title": "This computer · USB to the Cardputer" };
+  for (const [id, text] of Object.entries(labels)) $(id).textContent = text;
+  hint(emu);
   $("step4-title").textContent = emu ? "Your passkey signs" : "The chip signs";
   $("step4-sub").textContent = emu ? "Enter on the last page: the passkey signs the emulator's hash, and nothing else."
     : "Milestone 3: the chip signs that hash, and nothing else.";
   $("steps").lastElementChild.classList.toggle("future", !emu);
-  $("send-title").textContent = `Send it to ${signerName()}`;
   $("send").textContent = emu ? "Send to the emulator" : "Send to the Cardputer";
   $("c-device-k").textContent = emu ? "The emulator worked out" : "The Cardputer worked out";
   $("connect").hidden = emu;
   $("emu-screen").hidden = !emu;
   $("d-screen").hidden = emu;
-  $("emu-keys").hidden = !emu;
-  $("pager").hidden = emu;
-  $("d-caption").textContent = emu
-    ? "Live: the signer's core in WebAssembly. Keys: , and / page, Enter, Del (or Backspace)."
-    : "Drawn on the laptop by the firmware's own code, pixel for pixel.";
-  $("pk").hidden = !emu;
   $("sig").hidden = emu;
-  for (const id of ["t-fw", "t-chip", "t-locks", "t-counter"]) $(id).textContent = "—";
-  $("flow").classList.remove("haschip");
+  st.dev = {};
+  st.kpOpen = null;
+  st.found = null;
   st.pending = null;
+  st.usbScreen = "idle";
+  $("u-line").replaceChildren(el("span", "none", "nothing yet"));
   if (emu) {
     connState("on", "Emulator");
     if (st.emu) emuLines(st.emu.boot());
     renderPasskey();
     drawEmu();
+    requestAnimationFrame(routeCable);
   } else {
     connState(st.port ? "on" : "off", st.port ? "Connected" : "Not connected");
-    $("flow-screen").setAttribute("href", "screens/idle.png");
     if (st.port) send("ping");
   }
+  renderKeycard();
   resetSend();
   if (st.sel) renderScreen();
 }
@@ -204,22 +205,17 @@ function renderDetail() {
 function screenPages() {
   return st.reviews[st.sel.name].pages;
 }
+/** In USB mode the drawn Cardputer follows the real one: idle, its pages once it has answered (the
+ * keys here page through the same pictures), then rejected. In the emulator, the emulator draws. */
 function renderScreen() {
   if (emuMode()) return drawEmu();
-  const n = screenPages();
-  const last = st.page === n - 1;
-  const name = last && st.tamper ? `${st.sel.name}-tampered-${n}` : `${st.sel.name}-${st.page + 1}`;
-  $("d-screen").src = `screens/${name}.png`;
-  const dots = $("pg-dots");
-  dots.replaceChildren();
-  for (let i = 0; i < n; i++) {
-    const b = el("button", (i === st.page ? "on " : "") + (i === n - 1 ? "hash" : ""));
-    b.setAttribute("aria-label", i === n - 1 ? "The hash page" : `Page ${i + 1}`);
-    b.addEventListener("click", () => { st.page = i; renderScreen(); });
-    dots.append(b);
+  let name = "idle";
+  if (st.usbScreen === "rejected") name = "rejected";
+  else if (st.usbScreen === "review" && st.sel) {
+    const n = screenPages();
+    name = st.page === n - 1 && st.tamper ? `${st.sel.name}-tampered-${n}` : `${st.sel.name}-${st.page + 1}`;
   }
-  $("pg-prev").disabled = st.page === 0;
-  $("pg-next").disabled = last;
+  $("d-screen").src = `screens/${name}.png`;
 }
 
 function claimed() {
@@ -240,14 +236,13 @@ function renderLine() {
   c.querySelector(".side-blockie").replaceChildren(blockie(claimed(), 34));
   c.querySelector(".code").textContent = claimed().slice(-8);
   c.querySelector(".side-full").replaceChildren(hashNode(claimed()));
+  requestAnimationFrame(routeCable);
 }
 
 // ------------------------------------------------------------------ the emulator
 function drawEmu() {
   if (!st.emu) return;
-  const c = $("emu-screen");
-  c.getContext("2d").putImageData(new ImageData(st.emu.pixels(), st.emu.w, st.emu.h), 0, 0);
-  $("flow-screen").setAttribute("href", c.toDataURL());
+  $("emu-screen").getContext("2d").putImageData(new ImageData(st.emu.pixels(), st.emu.w, st.emu.h), 0, 0);
 }
 /** Lines from the emulator, read like the Cardputer's. */
 function emuLines(lines) {
@@ -259,35 +254,242 @@ function emuKey(name) {
   emuLines(st.emu.key(name));
 }
 
-// ------------------------------------------------------------------ the passkey
+/** A key on the drawn Cardputer: the emulator's, or in USB mode, paging the pictures along with the
+ * real device (its own keys do the real paging). */
+function press(name) {
+  flashCap(name);
+  if (emuMode()) return emuKey(name);
+  if (st.usbScreen !== "review") return;
+  const n = screenPages();
+  if ((name === "right" || name === "down" || name === "enter") && st.page < n - 1) st.page++;
+  else if ((name === "left" || name === "up") && st.page > 0) st.page--;
+  renderScreen();
+}
+
+// ------------------------------------------------------------------ the cables
+/** Draws the key's wires into the Grove port, and the cable from the Cardputer's USB-C port into
+ * this computer's port, wherever the layout has put them. Hidden when the bench is one column. */
+function routeCable() {
+  const svg = $("usb-overlay");
+  if (getComputedStyle(svg).display === "none") return;
+  // the port sits between what goes down the cable and what comes back up it
+  const pc = $("pc").getBoundingClientRect(), down = $("d-line").getBoundingClientRect(), up = $("u-line").getBoundingClientRect();
+  $("pc-port").style.top = `${Math.round((down.top + up.bottom) / 2 - pc.top - 12)}px`;
+  const b = $("bench").getBoundingClientRect(), u = document.querySelector(".cp-usb").getBoundingClientRect(), q = $("pc-port").getBoundingClientRect();
+  const x1 = u.right - b.left, y1 = u.top + u.height / 2 - b.top, x2 = q.left - b.left, y2 = q.top + q.height / 2 - b.top;
+  // out of the port, a loop down, and in from the left: a cable hanging between them
+  const dx = Math.max(40, (x2 - x1) * 0.9);
+  const d = `M${x1 + 18} ${y1} C ${x1 + 18 + dx} ${y1 + 10}, ${x2 - dx} ${y2 + 30}, ${x2} ${y2}`;
+  $("usb-cable").setAttribute("d", d);
+  $("pulse-tx").setAttribute("d", d);
+  $("pulse-rx").setAttribute("d", d);
+  const plug = $("usb-plug");
+  plug.setAttribute("x", x1 - 6);
+  plug.setAttribute("y", y1 - 8);
+
+  // the key: out of its panel's port and into the Grove port, one wire per pin
+  const k = $("kp-port").getBoundingClientRect(), g = document.querySelector(".cp-grove").getBoundingClientRect();
+  const kx = k.right - b.left, ky = k.top + k.height / 2 - b.top, gx = g.left - b.left + 2, gy = g.top + g.height / 2 - b.top;
+  const kdx = Math.max(24, (gx - kx) * 0.55);
+  const wire = (o, p) => `M${kx} ${ky + o} C ${kx + kdx} ${ky + o}, ${gx - kdx} ${gy + p}, ${gx} ${gy + p}`;
+  const step = g.height / 5;
+  document.querySelectorAll("#usb-overlay .w").forEach((w, i) => w.setAttribute("d", wire((i - 1.5) * 4, (i - 1.5) * step)));
+  $("webauthn").setAttribute("d", wire(0, 0));
+  $("pulse-key").setAttribute("d", wire(0, 0));
+  const lab = $("lab-wire");
+  lab.setAttribute("x", (kx + gx) / 2);
+  lab.setAttribute("y", Math.min(ky, gy) - 12);
+}
+
+// ------------------------------------------------------------------ the drawn Cardputer's keyboard
+const ROWS = [
+  [["`", "esc"], ["1", "!"], ["2", "@"], ["3", "#"], ["4", "$"], ["5", "%"], ["6", "^"], ["7", "&"], ["8", "*"], ["9", "("], ["0", ")"], ["-", "_"], ["=", "+"], ["del"]],
+  [["tab"], ["q"], ["w"], ["e"], ["r"], ["t"], ["y"], ["u"], ["i"], ["o"], ["p"], ["[", "{"], ["]", "}"], ["\\", "|"]],
+  [["fn"], ["Aa"], ["a"], ["s"], ["d"], ["f"], ["g"], ["h"], ["j"], ["k"], ["l"], [";"], ["'", "\""], ["ok"]],
+  [["ctrl"], ["opt"], ["alt"], ["z"], ["x"], ["c"], ["v"], ["b"], ["n"], ["m"], [","], ["."], ["/"], ["space"]],
+];
+// The signer's keys, as the firmware reads them: ; . , / are the arrows printed on the real one.
+const LIVE = { ";": "up", ".": "down", ",": "left", "/": "right", ok: "enter", del: "del" };
+const ARROW = { ";": "▲", ".": "▼", ",": "◀", "/": "▶" };
+const TAG = { esc: "t-esc", fn: "t-red", Aa: "t-blue", opt: "t-teal", ok: "t-ink", del: "t-ink" };
+const SHOWN = { ok: "ok ↵", del: "⌫", esc: "esc" };
+
+function buildKeyboard() {
+  const kb = $("cp-keys");
+  for (const row of ROWS) {
+    for (const [main, alt] of row) {
+      const live = LIVE[main];
+      const k = el("div", "kb" + (live ? " live" : ""));
+      const lab = el("span", "k-lab");
+      if (main === "`") lab.append(el("span", "t t-esc", "esc"), el("small", "", "`"));
+      else if (TAG[main]) lab.append(el("span", "t " + TAG[main], SHOWN[main] || main));
+      else if (ARROW[main]) lab.append(el("span", "", main), el("span", "arr", ARROW[main]));
+      else {
+        lab.append(el("span", "", main.length === 1 ? main.toUpperCase() : main));
+        if (alt) lab.append(el("small", "", alt));
+      }
+      const cap = el("button", "cap");
+      cap.type = "button";
+      cap.dataset.char = main === "ok" ? "enter" : main === "del" ? "backspace" : main === "space" ? " " : main.toLowerCase();
+      if (live) {
+        cap.dataset.live = live;
+        cap.setAttribute("aria-label", { up: "; (up)", down: ". (down)", left: ", (previous page)", right: "/ (next page)", enter: "ok (Enter)", del: "del (reject)" }[live]);
+        cap.addEventListener("click", () => press(live));
+      } else {
+        cap.tabIndex = -1;
+        cap.setAttribute("aria-hidden", "true");
+      }
+      k.append(lab, cap);
+      kb.append(k);
+    }
+  }
+}
+
+/** Shows a key going down on the drawn keyboard. */
+function flashCap(name, char) {
+  const cap = $("cp-keys").querySelector(name ? `[data-live="${name}"]` : `[data-char="${CSS.escape(char)}"]`);
+  if (!cap) return;
+  cap.classList.add("down");
+  setTimeout(() => cap.classList.remove("down"), 120);
+}
+
+function hint(emu) {
+  const h = $("stage-hint");
+  const kbd = (t) => el("kbd", "", t);
+  h.replaceChildren(...(emu
+    ? [document.createTextNode("Press the Cardputer's keys, or your own: "), kbd(","), kbd("/"), document.createTextNode(" page, "),
+       kbd("Enter"), document.createTextNode(" ok, "), kbd("Del"), document.createTextNode(" rejects. The screen is the firmware's own code, running in this page.")]
+    : [document.createTextNode("This screen follows your Cardputer. Page through it on the real one: "), kbd(","), kbd("/"),
+       document.createTextNode(", "), kbd("ok"), document.createTextNode(", "), kbd("del"), document.createTextNode(". The keys here page the pictures along with it.")]));
+}
+
+// ------------------------------------------------------------------ the key that's attached
+/** The key panel, out to the left of the key: a tab with the signing account's blockie and short
+ * address, which opens to the whole of it, and to making or loading a passkey. It starts open
+ * while there's no key, and closes on its own once there is one. */
+function renderKeycard() {
+  const panel = $("keypanel"), tab = $("kp-tab"), body = $("kp-body");
+  const emu = emuMode(), d = st.dev;
+  // the public key: the passkey's own, or the one the chip reported for slot 0
+  const pub = emu ? (st.key ? { x: st.key.x, y: st.key.y } : null) : d.pubkey ? { x: d.pubkey.slice(0, 64), y: d.pubkey.slice(64) } : null;
+  const addr = pub ? signerAddress(pub.x, pub.y) : null;
+  const open = st.kpOpen ?? !addr;
+  panel.className = "keypanel " + (emu ? "kp-pk" : "kp-chip") + (open ? " open" : "");
+  tab.setAttribute("aria-expanded", String(open));
+  tab.title = open ? "Fold the key panel away" : "Open the key panel";
+
+  // the tab: who signs, at a glance
+  const txt = el("div", "kp-txt");
+  txt.append(el("span", "kp-k", emu ? "Passkey" : "Chip"));
+  if (addr) {
+    txt.append(el("span", "kp-t1", emu ? `${st.key.id.slice(0, 4)} ${st.key.id.slice(4, 8)}` : d.chip.model),
+      el("span", "kp-t2", `${addr.slice(0, 6)}…${addr.slice(-4)}`));
+  } else {
+    txt.append(el("span", "kp-t1", emu ? (st.found ? "Confirm it" : "Set one up") : d.chip ? d.chip.model : d.missing ? "No chip" : st.port ? "Not read yet" : "Not connected"));
+  }
+  tab.replaceChildren(addr ? blockie(addr.toLowerCase(), 48) : el("div", "kp-ico", emu ? "🔑" : "▦"), txt,
+    el("span", "kp-chev", open ? "◂" : "▸"));
+
+  // the body
+  body.replaceChildren();
+  if (addr) {
+    const box = el("div", "kc-addr");
+    box.append(el("span", "kc-k", "Signs on chain as"));
+    const row = el("div", "kc-addr-row");
+    const copy = el("button", "btn btn-ghost", "Copy");
+    copy.addEventListener("click", () => navigator.clipboard?.writeText(addr).then(() => { copy.textContent = "Copied"; setTimeout(() => (copy.textContent = "Copy"), 1200); }));
+    row.append(el("code", "", addr), copy);
+    const fp = el("span", "fine", "P-256 key");
+    fingerprint(pub.x, pub.y).then((f) => (fp.textContent = `P-256 key, fingerprint ${f}`));
+    box.append(row, fp);
+    body.append(box);
+  } else if (emu && st.found) {
+    body.append(el("p", "kp-step", `Found passkey ${toHexShort(st.found.id)}. Confirm it once more: from two signatures this page works out its public key, which a passkey only hands out when it's made.`));
+  } else if (emu) {
+    body.append(el("p", "", "Your phone or computer makes a P-256 key inside its authenticator (Face ID, Touch ID, Windows Hello, a security key). It stands in for the ATECC608."));
+  } else if (d.chip && !d.pubkeyRead) {
+    body.append(el("p", "", "This firmware doesn't report the chip's public key. Flash the latest firmware below, then press Enter on the Cardputer's idle screen."));
+  } else if (d.chip) {
+    body.append(el("p", "", "Slot 0 has no key yet, so there is no address. Making a key in the chip is a permanent step, and this firmware never does it."));
+  } else if (st.port) {
+    body.append(el("p", "", "Press Enter on the Cardputer's idle screen: it reads the chip and reports it here."));
+  } else {
+    body.append(el("p", "", "Connect your Cardputer over USB. It reads the chip on its Grove port and reports its key here."));
+  }
+
+  const tags = el("div", "kc-tags");
+  const tag = (k, v) => { const t = el("span", "tag"); t.append(document.createTextNode(k + " "), el("b", "", v)); tags.append(t); };
+  if (d.fw) tag("firmware", d.fw);
+  if (emu && st.key) { tag("export", "can't"); if (st.lastSig) tag("sign count", String(st.lastSig.counter)); }
+  if (!emu && d.chip) { tag("serial", d.chip.serial.slice(0, 8) + "…"); tag("config", d.chip.config); tag("data", d.chip.data); tag("counter 0", d.chip.counter); }
+  if (tags.childNodes.length) body.append(tags);
+
+  const actions = el("div", "kc-actions");
+  const btn = (cls, text, fn) => { const b = el("button", "btn " + cls, text); b.addEventListener("click", fn); actions.append(b); };
+  if (emu && st.found) {
+    btn("btn-primary", "Confirm", confirmPasskey);
+    btn("btn-ghost", "Cancel", () => { st.found = null; renderKeycard(); });
+  } else if (emu && !st.key) {
+    btn("btn-primary", "Make a passkey", makePasskey);
+    btn("", "Use one I made before", findPasskey);
+    if (!window.PublicKeyCredential) actions.append(el("span", "pk-note bad", "This browser has no passkeys (WebAuthn)."));
+  } else if (emu) {
+    btn("btn-ghost", "Forget this passkey", () => {
+      passkey.forget(); st.key = null; st.lastSig = null; st.kpOpen = null;
+      if (st.emu) emuLines(st.emu.setPasskey(null));
+      renderPasskey(); renderKeycard();
+    });
+  }
+  if (actions.childNodes.length) body.append(actions);
+
+  if (addr) {
+    const note = el("details", "kc-note");
+    note.append(el("summary", "", "What is this address?"),
+      el("p", "", "A P-256 key can't be an Ethereum account by itself. Safe gives each one its own small signer contract, at this address, the same on every chain Safe's passkey factory is on (Ethereum, Base, and others). It only checks this key's signatures for a Safe."),
+      el("p", "", "It isn't a wallet: don't send ETH or tokens to it, because it has no way to move them. To hold funds, make a Safe with this address as one of its owners, and send them to the Safe. That's a good use for a diykey, though setting one up is outside this page."));
+    body.append(note);
+  }
+  requestAnimationFrame(routeCable);
+}
+
+const toHexShort = (b) => Array.from(b.slice(0, 4), (x) => x.toString(16).padStart(2, "0")).join("").replace(/(.{4})/, "$1 ");
+
+/** A key is set: fold the panel away. */
+function keyIsSet() {
+  st.kpOpen = false;
+  if (st.emu) emuLines(st.emu.setPasskey(st.key.id));
+  renderKeycard();
+}
+
+async function findPasskey() {
+  try {
+    st.found = await passkey.find();
+    log("sys", "passkey found; confirm it to work out its public key");
+  } catch (e) {
+    log("sys", `passkey: ${e.name}: ${e.message}`);
+    status(e.name === "NotAllowedError" ? "No passkey picked (cancelled, or none made on this site)." : `Couldn't find a passkey: ${e.message}`, "bad");
+  }
+  renderKeycard();
+}
+
+async function confirmPasskey() {
+  try {
+    st.key = await passkey.confirm(st.found);
+    log("sys", `passkey loaded: ${st.key.id.slice(0, 16)}…, its public key worked out from two signatures`);
+    st.found = null;
+    keyIsSet();
+  } catch (e) {
+    log("sys", `passkey: ${e.name}: ${e.message}`);
+    status(e.name === "NotAllowedError" ? "Not confirmed (cancelled)." : `Couldn't load that passkey: ${e.message}`, "bad");
+    renderKeycard();
+  }
+}
+
+/** The passkey's last signature, in detail, under the comparison. */
 function renderPasskey() {
   const pk = $("pk");
   pk.replaceChildren();
-  const head = el("div", "pk-head");
-  const k = st.key;
-  if (!k) {
-    head.append(el("div", "pk-icon", "🔑"));
-    const t = el("div");
-    t.append(el("b", "", "Make a passkey to sign"),
-      el("p", "", "A new passkey for this site, made by your phone or computer (Face ID, Touch ID, Windows Hello, or a security key). It is the emulator's key, in place of the ATECC608: P-256, made inside your authenticator, and it can't be exported."));
-    head.append(t);
-    const b = el("button", "btn btn-primary", "Make a passkey");
-    b.addEventListener("click", makePasskey);
-    head.append(b);
-    pk.append(head);
-    if (!window.PublicKeyCredential) pk.append(el("p", "pk-note bad", "This browser has no passkeys (WebAuthn)."));
-    return;
-  }
-  head.append(blockie(k.id, 34));
-  const t = el("div");
-  t.append(el("b", "", `Passkey ${k.id.slice(0, 4)} ${k.id.slice(4, 8)}`), el("p", "", `P-256 public key x ${k.x.slice(0, 10)}…  y ${k.y.slice(0, 10)}…`));
-  head.append(t);
-  const f = el("button", "btn btn-ghost", "Forget");
-  f.title = "Forget this passkey in this page. It stays in your keychain.";
-  f.addEventListener("click", () => { passkey.forget(); st.key = null; if (st.emu) emuLines(st.emu.setPasskey(null)); renderPasskey(); });
-  head.append(f);
-  pk.append(head);
-  pk.append(el("p", "pk-note", "Page through a transaction on the emulator; on the last page, Enter asks your passkey to sign the hash the emulator worked out."));
+  pk.hidden = !emuMode() || !st.lastSig;
   if (st.lastSig) pk.append(sigAnatomy(st.lastSig));
 }
 
@@ -295,7 +497,7 @@ async function makePasskey() {
   try {
     st.key = await passkey.create();
     log("sys", `passkey made: ${st.key.id.slice(0, 16)}…`);
-    if (st.emu) emuLines(st.emu.setPasskey(st.key.id));
+    keyIsSet();
   } catch (e) {
     log("sys", `passkey: ${e.name}: ${e.message}`);
     status(e.name === "NotAllowedError" ? "No passkey made (cancelled)." : `Couldn't make a passkey: ${e.message}`, "bad");
@@ -314,7 +516,7 @@ function startSign(hash) {
   }
   st.signing = true;
   steps({ 1: "done", 2: "done", 3: "done", 4: "active" });
-  flow("chip");
+  pulse("chip", 0);
   status("Your passkey is asking: confirm to sign the emulator's hash.");
   passkey.sign(hash, st.key)
     .then((a) => passkey.verify({ ...a, x: passkey.fromHex(st.key.x), y: passkey.fromHex(st.key.y), hash,
@@ -325,6 +527,7 @@ function startSign(hash) {
       st.signing = false;
       emuLines(st.emu.signResult(v.ok));
       renderPasskey();
+      renderKeycard();
     })
     .catch((e) => {
       log("sys", `passkey: ${e.name}: ${e.message}`);
@@ -378,14 +581,22 @@ function status(text, kind = "") {
   s.textContent = text;
   s.className = "send-status " + kind;
 }
-function flow(cls) {
-  const f = $("flow");
-  f.classList.remove("tx", "rx", "chip");
-  if (cls) f.classList.add(cls);
+const pulses = {};
+/** Data along a cable for a moment: "tx" down the USB cable, "rx" back up it, "chip" over the key's
+ * wires. With `ms` 0 it runs until stopPulse. */
+function pulse(kind, ms = 900) {
+  const f = $("bench");
+  clearTimeout(pulses[kind]);
+  f.classList.add("p-" + kind);
+  if (ms) pulses[kind] = setTimeout(() => f.classList.remove("p-" + kind), ms);
+}
+function stopPulse(kind) {
+  clearTimeout(pulses[kind]);
+  $("bench").classList.remove("p-" + kind);
 }
 function resetSend() {
   steps({});
-  flow();
+  stopPulse("chip");
   const d = $("c-device");
   d.className = "side side-empty";
   d.querySelector(".side-blockie").replaceChildren();
@@ -397,7 +608,7 @@ function resetSend() {
   vd.querySelector(".verdict-text").textContent = "waiting";
   if (emuMode()) status(st.emu ? "Ready: the emulator is on its idle screen." : "Loading the emulator…");
   else status(st.port ? "Ready. The Cardputer should show its idle screen." : "Connect the Cardputer to send.");
-  if (!emuMode()) $("flow-screen").setAttribute("href", "screens/idle.png");
+  if (!emuMode()) { st.usbScreen = "idle"; renderScreen(); }
   updateButtons();
 }
 
@@ -416,7 +627,7 @@ function showDeviceHash(h) {
   vd.querySelector(".verdict-text").textContent = same ? "the same hash" : "not the same";
   const honest = h === st.hash.hash;
   steps({ 1: "done", 2: honest ? "done" : "fail", 3: "active" });
-  flow();
+  stopPulse("chip");
   const who = emuMode() ? "The emulator" : "The Cardputer";
   if (same) {
     status(`${who} worked out the same hash. Page through it ${emuMode() ? "with › or /" : "on the device"}: ${p.pages || "its"} pages. ${emuMode() && st.key ? "Enter on the last page signs. " : ""}Del rejects.`, "good");
@@ -425,43 +636,55 @@ function showDeviceHash(h) {
   } else {
     status(`${who}'s hash is different from the one this browser worked out. Don't trust either until you know why.`, "bad");
   }
-  if (!emuMode()) $("flow-screen").setAttribute("href", `screens/${p.name}-1.png`);
+  if (!emuMode()) { st.usbScreen = "review"; st.page = 0; renderScreen(); }
 }
 
 // ------------------------------------------------------------------ lines from the signer
+/** The last few lines that came back up the cable. */
+function upLine(line, reply, bad) {
+  const pre = $("u-line");
+  pre.querySelector(".none")?.remove();
+  pre.append(el("div", reply ? (bad ? "r bad" : "r") : "", line));
+  while (pre.childNodes.length > 4) pre.firstChild.remove();
+  pre.scrollTop = pre.scrollHeight;
+}
 function onLine(line) {
   line = line.replace(/\r$/, "");
   if (!line.trim()) return;
   const reply = line.startsWith("= ");
-  log(reply ? (/^= (error|mismatch|busy|not signed)/.test(line) ? "in bad" : "in") : "dev", line);
+  const bad = /^= (error|mismatch|busy|not signed)/.test(line);
+  log(reply ? (bad ? "in bad" : "in") : "dev", line);
+  upLine(line, reply, bad);
+  pulse("rx");
 
   let m;
+  const d = st.dev;
   if ((m = line.match(/^cardputer-signer: (.+)$/)) || (m = line.match(/^= pong (cardputer-signer .+)$/))) {
     const what = m[1].replace(/^cardputer-signer /, "");
-    $("t-fw").textContent = what === "emulator" ? "emulator (WebAssembly)" : what.replace(/^m(\d)$/, "milestone $1").replace(/^milestone (\d)$/, "milestone $1");
+    d.fw = what === "emulator" ? "emulator (WebAssembly)" : what.replace(/^m(\d)$/, "milestone $1");
     if (!emuMode()) connState("on", "Connected");
+    renderKeycard();
   }
   if ((m = line.match(/^chip: serial \[([0-9a-f, ]+)\] revision \[([0-9a-f, ]+)\] config locked (\w+) data locked (\w+) counter0 (\d+)/))) {
     const serial = m[1].replace(/[ ,]/g, ""), rev = m[2].replace(/[ ,]/g, "");
     const model = rev.endsWith("6002") ? "ATECC608A" : rev.endsWith("6003") ? "ATECC608B" : "ATECC608";
-    $("t-chip").replaceChildren(blockie(serial, 26), el("span", "", model), el("code", "", serial.match(/.{1,4}/g).join(" ")));
-    $("t-locks").textContent = `config ${m[3] === "true" ? "locked" : "open"} · data ${m[4] === "true" ? "locked" : "open"}`;
-    $("t-counter").textContent = m[5];
-    $("flow").classList.add("haschip");
-    pulseChip();
-  } else if ((m = line.match(/^chip: passkey ([0-9a-f]+)/))) {
-    $("t-chip").replaceChildren(blockie(m[1], 26), el("span", "", "Passkey"), el("code", "", `${m[1].slice(0, 4)} ${m[1].slice(4, 8)} · P-256`));
-    $("t-locks").textContent = "can't be exported";
-    $("t-counter").textContent = st.lastSig ? String(st.lastSig.counter) : "—";
-    $("flow").classList.add("haschip");
-  } else if (line.startsWith("chip: no key")) {
-    $("t-chip").replaceChildren(el("span", "", "No passkey yet"), el("span", "muted", "make one below to sign"));
-    $("flow").classList.remove("haschip");
+    d.chip = { model, serial, config: m[3] === "true" ? "locked" : "open", data: m[4] === "true" ? "locked" : "open", counter: m[5] };
+    d.missing = false;
+    d.pubkey = null;
+    d.pubkeyRead = false;
+    pulse("chip", 1400);
+    renderKeycard();
+  } else if ((m = line.match(/^chip: pubkey0 (0x[0-9a-f]{128}|none)$/))) {
+    d.pubkeyRead = true;
+    d.pubkey = m[1] === "none" ? null : m[1].slice(2);
+    renderKeycard();
+  } else if (line.startsWith("chip: passkey ") || line.startsWith("chip: no key")) {
+    pulse("chip", 1400);
+    renderKeycard();
   } else if (line.startsWith("chip: no answer")) {
-    $("t-chip").replaceChildren(el("span", "", "No chip at 0x60"), el("span", "muted", "check the Grove wiring"));
-    $("flow").classList.remove("haschip");
-  } else if (line.startsWith("chip: ")) {
-    $("t-chip").replaceChildren(el("span", "", line.slice(6)));
+    d.chip = null;
+    d.missing = true;
+    renderKeycard();
   }
 
   const p = st.pending;
@@ -484,39 +707,33 @@ function onLine(line) {
     p.done = true;
     p.signed = true;
     steps({ 1: "done", 2: "done", 3: "done", 4: "done" });
-    flow();
+    stopPulse("chip");
     status("Signed by your passkey over the emulator's hash, and the signature checked out in this page. Enter on the emulator goes back.", "good");
     updateButtons();
   } else if (line === "= not signed") {
     steps({ 1: "done", 2: "done", 3: "active" });
-    flow();
+    stopPulse("chip");
   } else if (line === "= rejected") {
     p.done = true;
     steps({ 1: "done", 2: p.device === st.hash.hash ? "done" : "fail", 3: "done" });
     status(`Rejected on ${signerName()}. Nothing was signed; the key wasn't used.`, "");
-    if (!emuMode()) $("flow-screen").setAttribute("href", "screens/rejected.png");
+    if (!emuMode()) { st.usbScreen = "rejected"; renderScreen(); }
     updateButtons();
   } else if (line === "= busy") {
     clearTimeout(p.timer);
     p.done = true;
     steps({ 1: "fail" });
-    flow();
+    stopPulse("chip");
     status(`A transaction is already on ${signerName()}'s screen. Press Del there to reject it, then send again.`, "bad");
     updateButtons();
   } else if ((m = line.match(/^= error (.*)$/))) {
     clearTimeout(p.timer);
     p.done = true;
     steps({ 1: "fail" });
-    flow();
+    stopPulse("chip");
     status(`${emuMode() ? "The emulator" : "The Cardputer"} refused it: ${m[1]}.`, "bad");
     updateButtons();
   }
-}
-
-function pulseChip() {
-  const f = $("flow");
-  f.classList.add("chip");
-  setTimeout(() => f.classList.remove("chip"), 1400);
 }
 
 // ------------------------------------------------------------------ Web Serial
@@ -542,10 +759,8 @@ async function openPort(port) {
   st.reading = readLoop(port);
   if (!emuMode()) {
     connState("on", "Connected");
-    if (!$("flow").classList.contains("haschip")) {
-      // it prints the chip only at start-up, or on Enter at its idle screen; opening the port doesn't reset it
-      $("t-chip").replaceChildren(el("span", "muted", "press Enter on the Cardputer's idle screen to read it"));
-    }
+    // it prints the chip only at start-up, or on Enter at its idle screen; opening the port doesn't reset it
+    renderKeycard();
     resetSend();
     await send("ping");
   }
@@ -596,6 +811,7 @@ async function send(line) {
   if (emuMode()) {
     if (!st.emu) return;
     log("out", shown);
+    pulse("tx");
     // after the caller has set up, as a Cardputer's reply comes after the write
     queueMicrotask(() => emuLines(st.emu.send(line)));
     return;
@@ -605,6 +821,7 @@ async function send(line) {
   try {
     await w.write(new TextEncoder().encode(line + "\n"));
     log("out", shown);
+    pulse("tx");
   } finally {
     w.releaseLock();
   }
@@ -626,19 +843,17 @@ async function sendTx() {
   st.pending = p;
   resetSend();
   steps({ 1: "active" });
-  flow("tx");
   status("Sending the fields…");
   if (emuMode()) $("emu-screen").focus(); // so Enter and the page keys go to the emulator
   await send(txLine(fields(v), p.claimed));
   if (p.done || p.device) return; // the answer came back before the write finished
   steps({ 1: "done", 2: "active" });
-  flow("rx");
   status(`Waiting for ${signerName()}'s hash…`);
   p.timer = setTimeout(() => {
     if (p.device || p.done) return;
     p.done = true;
     steps({ 1: "done", 2: "fail" });
-    flow();
+    stopPulse("chip");
     status("No answer in 4 seconds. Is the signer firmware on the board? The log below shows what came back.", "bad");
     updateButtons();
   }, 4000);
@@ -749,8 +964,14 @@ async function main() {
   } else {
     log("sys", "the emulator isn't built: run web/build.sh");
   }
+  buildKeyboard();
+  const ro = new ResizeObserver(routeCable);
+  for (const id of ["bench", "keypanel", "cp"]) ro.observe($(id));
+  addEventListener("load", routeCable);
+  $("kp-tab").addEventListener("click", () => { st.kpOpen = !$("keypanel").classList.contains("open"); renderKeycard(); });
   select(st.vectors.find((v) => v.name === "eth-send-base-sepolia") || st.vectors[0]);
-  setMode(st.emu ? "emu" : "usb");
+  // #usb opens on the Cardputer (USB), when this browser has Web Serial
+  setMode(!st.emu || (location.hash === "#usb" && "serial" in navigator) ? "usb" : "emu");
 
   $("modes").addEventListener("click", (e) => {
     const b = e.target.closest("button");
@@ -763,12 +984,9 @@ async function main() {
     for (const x of $("filters").children) x.classList.toggle("on", x === b);
     renderList();
   });
-  $("pg-prev").addEventListener("click", () => { st.page = Math.max(0, st.page - 1); renderScreen(); });
-  $("pg-next").addEventListener("click", () => { st.page = Math.min(screenPages() - 1, st.page + 1); renderScreen(); });
-  $("emu-keys").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) emuKey(b.dataset.k); });
+  $("emu-keys").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) press(b.dataset.k); });
   $("tamper").addEventListener("change", (e) => {
     st.tamper = e.target.checked;
-    st.page = screenPages() - 1; // show what the device does with it: the hash page
     st.pending = null;
     renderScreen();
     renderLine();
@@ -788,13 +1006,8 @@ async function main() {
     // Enter and Space on a button press it, the emulator's on-screen keys included
     if ((e.key === "Enter" || e.key === " ") && e.target.closest("button, [role=button]")) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (emuMode()) {
-      const k = KEYMAP[e.key];
-      if (k) { e.preventDefault(); emuKey(k); }
-      return;
-    }
-    if (e.key === "ArrowRight") $("pg-next").click();
-    if (e.key === "ArrowLeft") $("pg-prev").click();
+    const k = KEYMAP[e.key];
+    if (k) { e.preventDefault(); press(k); } else flashCap(null, e.key.toLowerCase());
   });
   if ("serial" in navigator) {
     navigator.serial.addEventListener("disconnect", (e) => {

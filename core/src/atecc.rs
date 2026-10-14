@@ -1,6 +1,7 @@
 //! The ATECC608's I2C packets, ported from the MicroPython driver `atecc.py`, which started in
 //! picowallet by Austin Griffith (MIT, github.com/austintgriffith/picowallet). Only commands that
-//! read: nothing here can write, lock, or make a key. The firmware sends what `packet` builds and
+//! read: nothing here can write, lock, or make a key. GenKey appears only in its mode 0, which
+//! works out the public key of the private key already in a slot and changes nothing. The firmware sends what `packet` builds and
 //! checks the answer with `response`.
 //!
 //! A command: word address 0x03, then count, opcode, p1, p2 (little-endian), data, CRC-16.
@@ -13,6 +14,7 @@ pub const WAKE_OK: [u8; 4] = [0x04, 0x11, 0x33, 0x43];
 pub const OP_READ: u8 = 0x02;
 pub const OP_INFO: u8 = 0x30;
 pub const OP_COUNTER: u8 = 0x24;
+pub const OP_GENKEY: u8 = 0x40;
 
 /// The chip's CRC-16 (poly 0x8005, bits taken low first), little-endian.
 pub fn crc16(data: &[u8]) -> [u8; 2] {
@@ -109,6 +111,13 @@ pub const fn read_counter(idx: u16) -> Cmd {
     Cmd { opcode: OP_COUNTER, p1: 0x00, p2: idx, resp_len: 4, wait_ms: 20 }
 }
 
+/// The public key (x ‖ y, 64 bytes) of the private key in `slot`: GenKey mode 0, which only
+/// computes it. Mode 0x04 would make a new key and destroy the old one; the mode here is fixed at
+/// 0, and `public_key_is_mode_0` holds it there. Fails on an empty slot, or one whose PubInfo is clear.
+pub const fn public_key(slot: u16) -> Cmd {
+    Cmd { opcode: OP_GENKEY, p1: 0x00, p2: slot, resp_len: 64, wait_ms: 120 }
+}
+
 /// The 9-byte serial number out of config block 0.
 pub fn serial(block0: &[u8]) -> [u8; 9] {
     let mut s = [0u8; 9];
@@ -139,10 +148,19 @@ mod tests {
             (read_config(0), "03070280000009ad"),
             (REVISION, "030730000000035d"),
             (read_counter(0), "0307240000000cfd"),
+            (public_key(0), "0307400000000005"),
         ] {
             let n = packet(cmd.opcode, cmd.p1, cmd.p2, &[], &mut out);
             let mut h = [0u8; 32];
             assert_eq!(crate::hex::encode(&out[..n], &mut h), want);
+        }
+    }
+
+    #[test]
+    fn public_key_is_mode_0() {
+        for slot in 0..16 {
+            let c = public_key(slot);
+            assert_eq!((c.opcode, c.p1, c.p2), (OP_GENKEY, 0x00, slot)); // never 0x04: a new key
         }
     }
 

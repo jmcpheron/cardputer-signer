@@ -24,13 +24,7 @@
       <div class="brand-sub">A Safe signer you build, or try with a passkey</div>
     </div>
   </div>
-  <div class="conn">
-    <div class="modes" id="modes" role="tablist" aria-label="Which signer">
-      <button data-m="emu" class="on" role="tab">Emulator</button><button data-m="usb" role="tab">Cardputer (USB)</button>
-    </div>
-    <span id="conn-pill" class="pill pill-off"><span class="dot"></span><span id="conn-text">Not connected</span></span>
-    <button id="connect" class="btn btn-primary">Connect</button>
-  </div>
+  <nav class="top-links"><a href="#detail">The transaction</a><a href="#flash">Flash</a><a href="https://github.com/jmcpheron/diykey">Source</a></nav>
 </header>
 
 <div id="no-serial" class="notice" hidden>
@@ -39,175 +33,167 @@
 </div>
 
 <section class="hero">
-  <div class="hero-text">
-    <p class="eyebrow">How a transaction gets checked</p>
-    <h1>The device works out the hash.<br><span>Not the computer.</span></h1>
-    <p class="lede" id="lede"></p>
+  <div class="hero-head">
+    <div>
+      <h1>Build a Safe signer from a Cardputer. <span>Or try it right here.</span></h1>
+      <p class="lede" id="lede"></p>
+    </div>
+    <div class="conn">
+      <div class="modes" id="modes" role="tablist" aria-label="Which signer">
+        <button data-m="emu" class="on" role="tab">Emulator + passkey</button><button data-m="usb" role="tab">My Cardputer (USB)</button>
+      </div>
+      <span id="conn-pill" class="pill pill-off"><span class="dot"></span><span id="conn-text">Not connected</span></span>
+      <button id="connect" class="btn btn-primary">Connect over USB</button>
+    </div>
   </div>
 
-  <svg id="flow" class="flow" viewBox="0 0 1000 250" role="img" aria-label="This page, a USB cable, the Cardputer, a Grove cable through a regulator, and the ATECC608 chip">
-    <defs>
-      <linearGradient id="g-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a414d"/><stop offset="1" stop-color="#232831"/></linearGradient>
-      <linearGradient id="g-chip" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a2140"/><stop offset="1" stop-color="#15101f"/></linearGradient>
-      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
-    </defs>
-    <!-- the laptop -->
-    <g class="node node-pc">
-      <rect x="20" y="58" width="190" height="122" rx="10" class="pc-screen"/>
-      <rect x="32" y="70" width="166" height="98" rx="4" class="pc-glass"/>
-      <rect x="44" y="82" width="70" height="7" rx="3.5" class="pc-line"/>
-      <rect x="44" y="96" width="140" height="5" rx="2.5" class="pc-line dim"/>
-      <rect x="44" y="106" width="118" height="5" rx="2.5" class="pc-line dim"/>
-      <rect x="44" y="122" width="82" height="22" rx="6" class="pc-btn"/>
-      <path d="M4 186h222l-14 14H18z" class="pc-base"/>
-      <text x="115" y="226" class="node-label">This page</text>
-      <text x="115" y="242" class="node-sub">works out the hash, claims it</text>
-    </g>
-    <!-- USB cable -->
-    <path id="cable-usb" d="M226 186 C 290 186, 300 120, 372 120" class="cable"/>
-    <path d="M226 186 C 290 186, 300 120, 372 120" class="cable-flow" id="flow-usb"/>
-    <text x="300" y="112" class="cable-label" id="usb-label">USB</text>
-    <!-- the Cardputer -->
-    <g class="node node-card">
-      <rect x="372" y="38" width="250" height="168" rx="16" fill="url(#g-body)" class="card-body"/>
-      <rect x="386" y="50" width="222" height="128" rx="6" class="card-bezel"/>
-      <image id="flow-screen" x="392" y="56" width="210" height="118" href="screens/idle.png" preserveAspectRatio="none"/>
-      <g class="card-keys">
-        <rect x="390" y="186" width="20" height="10" rx="2"/><rect x="414" y="186" width="20" height="10" rx="2"/><rect x="438" y="186" width="20" height="10" rx="2"/><rect x="462" y="186" width="20" height="10" rx="2"/><rect x="486" y="186" width="20" height="10" rx="2"/><rect x="510" y="186" width="20" height="10" rx="2"/><rect x="534" y="186" width="20" height="10" rx="2"/><rect x="558" y="186" width="20" height="10" rx="2"/><rect x="582" y="186" width="26" height="10" rx="2"/>
-      </g>
-      <text x="497" y="226" class="node-label" id="card-label">Cardputer</text>
-      <text x="497" y="242" class="node-sub">works out its own, shows every page</text>
-    </g>
-    <!-- Grove cable and regulator -->
-    <path d="M622 120 H 700" class="cable"/>
-    <path d="M740 120 H 800" class="cable"/>
-    <path d="M622 120 H 700 M740 120 H 800" class="cable-flow" id="flow-i2c"/>
-    <g class="hw-only"><rect x="700" y="104" width="40" height="32" rx="5" class="reg"/>
-    <text x="720" y="124" class="reg-text">3.3V</text></g>
-    <text x="660" y="112" class="cable-label" id="grove-label">Grove</text>
-    <!-- the chip -->
-    <g class="node node-chip">
-      <circle cx="880" cy="120" r="58" class="chip-halo" filter="url(#glow)"/>
-      <rect x="800" y="72" width="160" height="96" rx="10" fill="url(#g-chip)" class="chip-board"/>
-      <rect x="852" y="96" width="56" height="48" rx="4" class="chip-ic"/>
-      <g class="chip-pins">
-        <rect x="846" y="102" width="6" height="3"/><rect x="846" y="110" width="6" height="3"/><rect x="846" y="118" width="6" height="3"/><rect x="846" y="126" width="6" height="3"/><rect x="846" y="134" width="6" height="3"/>
-        <rect x="908" y="102" width="6" height="3"/><rect x="908" y="110" width="6" height="3"/><rect x="908" y="118" width="6" height="3"/><rect x="908" y="126" width="6" height="3"/><rect x="908" y="134" width="6" height="3"/>
-      </g>
-      <text x="880" y="124" class="chip-text" id="chip-text">608</text>
-      <text x="880" y="226" class="node-label" id="chip-label">ATECC608</text>
-      <text x="880" y="242" class="node-sub" id="chip-sub">the key, made inside, never leaves</text>
-    </g>
-  </svg>
+  <div class="bench" id="bench">
+    <aside class="keypanel" id="keypanel" aria-label="The key">
+      <button class="kp-tab" id="kp-tab" type="button" aria-expanded="true" aria-controls="kp-body"></button>
+      <div class="kp-body" id="kp-body"></div>
+      <span class="kp-port" id="kp-port" aria-hidden="true"></span>
+    </aside>
+    <div class="bench-left">
+      <div class="stage" id="stage">
+    <div class="cp" id="cp">
+      <div class="cp-grove" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="cp-usb" aria-hidden="true"></div>
+      <div class="cp-label" aria-hidden="true">
+        <b>CARD<br>COMPUTER</b>
+        <span class="cp-mic">Mic <svg viewBox="0 0 10 14"><rect x="3" y="0" width="4" height="8" rx="2"/><path d="M1 6a4 4 0 0 0 8 0M5 10v3"/></svg></span>
+        <span class="cp-pins">DataG46<br>ClkG43</span>
+      </div>
+      <div class="cp-g0" aria-hidden="true"></div>
+      <div class="cp-screen">
+        <img id="d-screen" alt="The Cardputer's screen" width="240" height="135" src="screens/idle.png">
+        <canvas id="emu-screen" width="240" height="135" hidden tabindex="0" aria-label="The emulator's screen: , and / page, Enter, Del"></canvas>
+      </div>
+      <div class="cp-m5" aria-hidden="true">M5</div>
+      <svg class="cp-stamp" viewBox="0 0 120 84" aria-hidden="true">
+        <rect x="1" y="1" width="118" height="82" rx="7" class="st-bg"/>
+        <text x="8" y="22" class="st-stamp">STAMP</text>
+        <text x="74" y="46" class="st-s3">S3</text>
+        <rect x="8" y="28" width="20" height="9" rx="2" class="st-r"/><rect x="31" y="28" width="14" height="9" rx="2" class="st-y"/><rect x="48" y="28" width="16" height="9" rx="2" class="st-b"/>
+        <text x="8" y="50" class="st-t">ESP32-S3</text>
+        <rect x="8" y="56" width="10" height="7" rx="1.5" class="st-b"/><rect x="21" y="56" width="10" height="7" rx="1.5" class="st-r"/><rect x="34" y="56" width="22" height="7" rx="1.5" class="st-y"/>
+        <text x="8" y="76" class="st-t">USB · 8MB</text>
+      </svg>
+      <div class="cp-keys" id="cp-keys" aria-label="The Cardputer's keyboard: ; . , / page, ok and del"></div>
+    </div>
 
-  <ol class="steps" id="steps">
-    <li data-step="1"><span class="step-n">1</span><div><b>Fields over USB</b><small>This page sends the transaction as one line of text.</small></div></li>
-    <li data-step="2"><span class="step-n">2</span><div><b>Hash on the device</b><small>The Cardputer rebuilds the EIP-712 hash and answers with it.</small></div></li>
-    <li data-step="3"><span class="step-n">3</span><div><b>Every page reviewed</b><small>You page through it on the Cardputer. Del rejects.</small></div></li>
-    <li data-step="4"><span class="step-n">4</span><div><b id="step4-title">The key signs</b><small id="step4-sub"></small></div></li>
-  </ol>
+        <div class="stage-mini" aria-hidden="true">
+          <span id="mini-key">ATECC608</span><i id="mini-wire">Grove</i><span>Cardputer</span><i>USB</i><span id="mini-host">This computer</span>
+        </div>
+      </div>
+      <p class="stage-hint" id="stage-hint"></p>
+      <div class="emu-keys" id="emu-keys">
+        <button data-k="left" class="btn" aria-label="Previous page (,)">‹</button>
+        <button data-k="del" class="btn btn-danger">Del</button>
+        <button data-k="enter" class="btn btn-primary">Enter</button>
+        <button data-k="right" class="btn" aria-label="Next page (/)">›</button>
+      </div>
+      <ol class="steps" id="steps">
+        <li data-step="1"><span class="step-n">1</span><div><b>Fields over USB</b><small>This computer sends the transaction as one line of text.</small></div></li>
+        <li data-step="2"><span class="step-n">2</span><div><b>Hash on the device</b><small>The signer rebuilds the EIP-712 hash and answers with it.</small></div></li>
+        <li data-step="3"><span class="step-n">3</span><div><b>Every page reviewed</b><small>You page through it on its screen. Del rejects.</small></div></li>
+        <li data-step="4"><span class="step-n">4</span><div><b id="step4-title">The key signs</b><small id="step4-sub"></small></div></li>
+      </ol>
+    </div>
 
-  <div class="device-strip" id="device-strip">
-    <div class="tile"><span class="tile-k">Firmware</span><span class="tile-v" id="t-fw">—</span></div>
-    <div class="tile tile-chip"><span class="tile-k">Chip</span><span class="tile-v" id="t-chip"><span class="muted">connect to read it</span></span></div>
-    <div class="tile"><span class="tile-k">Locks</span><span class="tile-v" id="t-locks">—</span></div>
-    <div class="tile"><span class="tile-k">Counter 0</span><span class="tile-v" id="t-counter">—</span></div>
+    <section class="pc" id="pc" aria-label="This computer">
+      <div class="pc-bar"><span class="pc-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="pc-title" id="pc-title">This computer</span></div>
+      <span class="pc-port" id="pc-port" aria-hidden="true"></span>
+      <div class="pc-body">
+        <div class="dock-head">
+          <h2>Pick a transaction</h2>
+          <div class="filters" id="filters" role="tablist">
+            <button data-f="all" class="on">All</button><button data-f="ok">Plain</button><button data-f="warn">Careful</button><button data-f="red">Red</button>
+          </div>
+        </div>
+        <ul id="txs" class="txs"></ul>
+
+        <div class="send-row">
+          <button id="send" class="btn btn-primary btn-big" disabled>Send</button>
+          <label class="switch"><input type="checkbox" id="tamper"><span class="switch-ui"></span><span>Claim a wrong hash</span></label>
+        </div>
+        <p id="send-status" class="send-status" aria-live="polite"></p>
+        <div class="down">
+          <span class="down-k">Down the USB cable</span>
+          <pre class="line" id="d-line"></pre>
+        </div>
+
+        <div class="down up">
+          <span class="down-k">Up the USB cable</span>
+          <pre class="line" id="u-line"><span class="none">nothing yet</span></pre>
+        </div>
+      </div>
+    </section>
+
+
+    <svg class="usb-overlay" id="usb-overlay" aria-hidden="true">
+      <defs><linearGradient id="g-cable2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f5f7"/><stop offset="1" stop-color="#c9ccd2"/></linearGradient></defs>
+      <!-- the key into the Grove port: four wires, or the browser's WebAuthn in the emulator -->
+      <g class="hw-only"><path class="w w-black"/><path class="w w-red"/><path class="w w-yellow"/><path class="w w-white"/></g>
+      <path class="emu-only webauthn" id="webauthn"/>
+      <path id="pulse-key" class="pulse"/>
+      <text class="wire-lab" id="lab-wire">Grove</text>
+      <path id="usb-cable" class="usb-cable"/>
+      <path id="pulse-tx" class="pulse"/>
+      <path id="pulse-rx" class="pulse"/>
+      <rect id="usb-plug" class="usb-plug" width="26" height="16" rx="5"/>
+    </svg>
   </div>
-</section>
-
-<main class="grid">
-  <aside class="txlist">
-    <div class="txlist-head">
-      <h2>Demo transactions</h2>
-      <div class="filters" id="filters" role="tablist">
-        <button data-f="all" class="on">All</button><button data-f="ok">Plain</button><button data-f="warn">Careful</button><button data-f="red">Red</button>
+  <section class="result" id="result" aria-label="What came back">
+    <div class="compare">
+      <div class="side" id="c-claim">
+        <span class="side-k">This computer claims</span>
+        <div class="side-hash"><span class="side-blockie"></span><span class="code"></span></div>
+        <code class="side-full"></code>
       </div>
-    </div>
-    <ul id="txs" class="txs"></ul>
-    <p class="fine">From <code>vectors/safe_tx.json</code>. The words and colours are what the Cardputer's own decoder says.</p>
-  </aside>
-
-  <section class="detail" id="detail">
-    <div class="detail-head">
-      <div class="chips" id="d-chips"></div>
-      <h2 id="d-title">—</h2>
-      <p id="d-desc" class="muted"></p>
-    </div>
-
-    <div class="two">
-      <figure class="device">
-        <div class="device-body">
-          <div class="device-bezel"><img id="d-screen" alt="The Cardputer's screen for this page" width="240" height="135"><canvas id="emu-screen" width="240" height="135" hidden tabindex="0" aria-label="The emulator's screen: , and / page, Enter, Del"></canvas></div>
-          <div class="device-keys" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-        </div>
-        <div class="emu-keys" id="emu-keys" hidden>
-          <button data-k="left" class="btn" aria-label="Previous page (,)">‹</button>
-          <button data-k="del" class="btn btn-danger">Del</button>
-          <button data-k="enter" class="btn btn-primary">Enter</button>
-          <button data-k="right" class="btn" aria-label="Next page (/)">›</button>
-        </div>
-        <div class="pager" id="pager">
-          <button id="pg-prev" class="btn btn-ghost" aria-label="Previous page">‹</button>
-          <div id="pg-dots" class="dots"></div>
-          <button id="pg-next" class="btn btn-ghost" aria-label="Next page">›</button>
-        </div>
-        <figcaption id="d-caption"></figcaption>
-      </figure>
-
-      <div class="facts">
-        <h3>What the signer says</h3>
-        <ul id="d-items" class="items"></ul>
-        <h3>The fields</h3>
-        <dl id="d-fields" class="fields"></dl>
+      <div class="verdict" id="c-verdict"><span class="verdict-icon">?</span><span class="verdict-text">waiting</span></div>
+      <div class="side side-empty" id="c-device">
+        <span class="side-k" id="c-device-k">The Cardputer worked out</span>
+        <div class="side-hash"><span class="side-blockie"></span><span class="code">— — — —</span></div>
+        <code class="side-full">send it to find out</code>
       </div>
     </div>
 
-    <div class="anatomy">
-      <h3>How the hash is made <small>EIP-712, Safe 1.3.0 and later</small></h3>
-      <div class="anatomy-row">
-        <div class="hstep"><span class="hstep-k">Domain separator</span><code class="hstep-f">keccak256(EIP712Domain, <b id="a-chain"></b>, <b id="a-safe"></b>)</code><code class="hstep-v" id="a-domain"></code></div>
-        <div class="harrow" aria-hidden="true">+</div>
-        <div class="hstep"><span class="hstep-k">SafeTx struct</span><code class="hstep-f">keccak256(SafeTx, to, value, keccak256(data), operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce)</code><code class="hstep-v" id="a-struct"></code></div>
-        <div class="harrow" aria-hidden="true">→</div>
-        <div class="hstep hstep-final"><span class="hstep-k">safeTxHash</span><code class="hstep-f">keccak256(0x19 0x01 ‖ domain ‖ struct)</code><div class="hstep-hash"><span id="a-blockie"></span><code class="hstep-v" id="a-hash"></code></div></div>
-      </div>
-      <p class="fine" id="a-note"></p>
-    </div>
-
-    <div class="send">
-      <div class="send-head">
-        <h3 id="send-title">Send it to the Cardputer</h3>
-        <label class="switch"><input type="checkbox" id="tamper"><span class="switch-ui"></span><span>Claim a wrong hash</span></label>
-      </div>
-      <pre class="line" id="d-line"></pre>
-      <div class="send-actions">
-        <button id="send" class="btn btn-primary btn-big" disabled>Send</button>
-        <span id="send-status" class="send-status" aria-live="polite">Connect the Cardputer to send.</span>
-      </div>
-
-      <div class="compare">
-        <div class="side" id="c-claim">
-          <span class="side-k">This page claims</span>
-          <div class="side-hash"><span class="side-blockie"></span><span class="code"></span></div>
-          <code class="side-full"></code>
-        </div>
-        <div class="verdict" id="c-verdict"><span class="verdict-icon">?</span><span class="verdict-text">waiting</span></div>
-        <div class="side side-empty" id="c-device">
-          <span class="side-k" id="c-device-k">The Cardputer worked out</span>
-          <div class="side-hash"><span class="side-blockie"></span><span class="code">— — — —</span></div>
-          <code class="side-full">send it to find out</code>
-        </div>
-      </div>
-
-      <div class="pk" id="pk" hidden></div>
-
-      <div class="sig" id="sig">
-        <div class="sig-icon" aria-hidden="true">✎</div>
-        <div><b>Signature: milestone 3</b><p>The firmware doesn't sign yet. When it does, the chip's signature over
-          the hash the Cardputer worked out comes back here, and this page checks it against the chip's public key.</p></div>
-      </div>
+    <div class="pk" id="pk" hidden></div>
+    <div class="sig" id="sig">
+      <div class="sig-icon" aria-hidden="true">✎</div>
+      <div><b>Signature: milestone 3</b><p>The Cardputer's firmware doesn't sign yet. When it does, the chip's signature over
+        the hash it worked out comes back here, checked against the key above.</p></div>
     </div>
   </section>
+</section>
+
+<main class="detail" id="detail">
+  <div class="detail-head">
+    <div class="chips" id="d-chips"></div>
+    <h2 id="d-title">—</h2>
+    <p id="d-desc" class="muted"></p>
+  </div>
+  <div class="two">
+    <div class="facts">
+      <h3>What the signer says</h3>
+      <ul id="d-items" class="items"></ul>
+    </div>
+    <div class="facts">
+      <h3>The fields</h3>
+      <dl id="d-fields" class="fields"></dl>
+    </div>
+  </div>
+  <div class="anatomy">
+    <h3>How the hash is made <small>EIP-712, Safe 1.3.0 and later</small></h3>
+    <div class="anatomy-row">
+      <div class="hstep"><span class="hstep-k">Domain separator</span><code class="hstep-f">keccak256(EIP712Domain, <b id="a-chain"></b>, <b id="a-safe"></b>)</code><code class="hstep-v" id="a-domain"></code></div>
+      <div class="harrow" aria-hidden="true">+</div>
+      <div class="hstep"><span class="hstep-k">SafeTx struct</span><code class="hstep-f">keccak256(SafeTx, to, value, keccak256(data), operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, nonce)</code><code class="hstep-v" id="a-struct"></code></div>
+      <div class="harrow" aria-hidden="true">→</div>
+      <div class="hstep hstep-final"><span class="hstep-k">safeTxHash</span><code class="hstep-f">keccak256(0x19 0x01 ‖ domain ‖ struct)</code><div class="hstep-hash"><span id="a-blockie"></span><code class="hstep-v" id="a-hash"></code></div></div>
+    </div>
+    <p class="fine" id="a-note"></p>
+  </div>
 </main>
 
 <section class="flash" id="flash">

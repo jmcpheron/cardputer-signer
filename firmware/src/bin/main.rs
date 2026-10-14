@@ -174,7 +174,7 @@ impl Atecc<'_> {
         self.i2c.write(atecc::ADDR, &pkt[..n]).map_err(|_| atecc::Error::NoChip)?;
         self.delay.delay_millis(cmd.wait_ms);
         let len = cmd.resp_len + 3;
-        let mut resp = [0u8; 40];
+        let mut resp = [0u8; 72];
         for _ in 0..100 {
             if self.i2c.read(atecc::ADDR, &mut resp[..len]).is_ok() {
                 let p = atecc::response(&resp[..len])?;
@@ -199,8 +199,11 @@ impl Atecc<'_> {
         self.command(&atecc::read_config(2), &mut b2)?;
         self.command(&atecc::REVISION, &mut rev)?;
         self.command(&atecc::read_counter(0), &mut ctr)?;
+        // slot 0's public key, if it has one: GenKey mode 0 only computes it (atecc::public_key)
+        let mut pk = [0u8; 64];
+        let pubkey0 = self.command(&atecc::public_key(0), &mut pk).ok().filter(|&n| n == 64).map(|_| pk);
         let (config_locked, data_locked) = atecc::locks(&b2);
-        Ok(ChipInfo { serial: atecc::serial(&b0), revision: rev, config_locked, data_locked, counter0: u32::from_le_bytes(ctr) })
+        Ok(ChipInfo { serial: atecc::serial(&b0), revision: rev, config_locked, data_locked, counter0: u32::from_le_bytes(ctr), pubkey0 })
     }
 }
 
@@ -244,6 +247,13 @@ fn read_chip(chip: &mut Atecc, out: &mut Out) -> Chip {
         Ok(c) => {
             say!(out, "chip: serial {:02x?} revision {:02x?} config locked {} data locked {} counter0 {}",
                      c.serial, c.revision, c.config_locked, c.data_locked, c.counter0);
+            match &c.pubkey0 {
+                Some(pk) => {
+                    let mut h = [0u8; 128];
+                    say!(out, "chip: pubkey0 0x{}", signer_core::hex::encode(pk, &mut h));
+                }
+                None => say!(out, "chip: pubkey0 none"),
+            }
             Chip::Found(c)
         }
         Err(atecc::Error::NoChip) => {

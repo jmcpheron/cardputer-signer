@@ -10,3 +10,8 @@ They come from outside this Rust code, so the tests check it against something i
 - `blockies.json`: drawn by the MicroPython `blockies.py` (`build()` and `hsl_to_rgb()`) under
   CPython. That file started in Austin Griffith's picowallet. It is a port of
   github.com/ethereum/blockies and draws the same pictures as the Safe app.
+- `webauthn.json`: carried over unchanged from the MicroPython version. Four P-256 keys, each
+  with its Safe passkey signer address, and assertions over Safe transaction hashes, made with
+  viem. Each was checked onchain against Safe's passkey factory (safe-modules passkey v0.2.1) on
+  Base Sepolia: `getSigner` gave the address, and `isValidSignatureForSigner` accepted the
+  signature. The page's address and signature encoding are tested against them.

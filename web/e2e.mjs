@@ -78,21 +78,42 @@ try {
   const errors = [];
   ws.addEventListener("message", (e) => { const m = JSON.parse(e.data); if (m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text); });
   await page("Page.navigate", { url: process.env.E2E_URL || `http://localhost:${port}/web/` });
-  await until('document.getElementById("t-fw").textContent.includes("emulator")', "the emulator");
+  await until('document.getElementById("keypanel").textContent.includes("emulator (WebAssembly)")', "the emulator");
   check(true, "the emulator loaded (WebAssembly, under the page's CSP)");
 
-  await evaluate('[...document.querySelectorAll("#pk button")].find(b => b.textContent === "Make a passkey").click()');
-  await until('document.querySelector("#pk b")?.textContent.startsWith("Passkey ")', "the passkey");
-  check(await evaluate('document.getElementById("t-chip").textContent.includes("Passkey")'), "a passkey made, and the emulator shows it as its key");
+  const button = (text) => evaluate(`[...document.querySelectorAll("#keypanel button")].find(b => b.textContent === ${JSON.stringify(text)}).click()`);
+  const address = () => evaluate('document.querySelector("#kp-body .kc-addr code")?.textContent');
+  check(await evaluate('document.getElementById("keypanel").classList.contains("open")'), "with no passkey, the key panel is open");
+  await button("Make a passkey");
+  await until('document.querySelector("#kp-body .kc-addr code")', "the passkey");
+  const made = await address();
+  check(/^0x[0-9a-fA-F]{40}$/.test(made), "a passkey made; its Safe signer address: " + made);
+  check(await evaluate('!document.getElementById("keypanel").classList.contains("open") && document.getElementById("kp-tab").textContent.includes("' + "…" + '")'),
+    "the panel folded to its tab: the account's blockie and short address");
 
-  // An honest claim: page to the hash, then Enter signs.
+  // A passkey made before: forget it here, find it again, and its address comes back from two signatures.
+  await button("Forget this passkey");
+  check(await address() === undefined, "forgotten: no key in the page");
+  await button("Use one I made before");
+  await until('[...document.querySelectorAll("#keypanel button")].some(b => b.textContent === "Confirm")', "the passkey found");
+  await button("Confirm");
+  await until('document.querySelector("#kp-body .kc-addr code")', "the passkey loaded");
+  check(await address() === made, "loaded again from two signatures: the same address");
+
+  // Reload with the passkey saved: the page hands it to the emulator first, and must still start.
+  await page("Page.reload", {});
+  await until('document.getElementById("keypanel").textContent.includes("emulator (WebAssembly)")', "the emulator after a reload");
+  check(!errors.length && await evaluate('document.getElementById("pc-title").textContent.startsWith("This page")') && await address() === made,
+    "reloaded with the passkey saved: the page started, the same address" + (errors.length ? "; " + errors.join("; ") : ""));
+
+  // An honest claim: page to the hash on the drawn Cardputer's own keys, then its ok key signs.
   await evaluate('document.getElementById("send").click()');
   await until('document.getElementById("c-verdict").classList.contains("match")', "the emulator's hash");
   check(true, "the emulator worked out the same hash as the page");
-  for (let i = 0; i < 4; i++) await press("/", "Slash");
-  await press("Enter", "Enter");
+  for (let i = 0; i < 4; i++) { await evaluate('document.querySelector(\'#cp-keys [data-live="right"]\').click()'); await sleep(60); }
+  await evaluate('document.querySelector(\'#cp-keys [data-live="enter"]\').click()');
   await until('document.querySelector(".anat h4")', "the signature", 10000);
-  check(await evaluate('document.querySelector(".anat h4").textContent.startsWith("Signed, and checked")'), "the passkey signed, and the page verified it");
+  check(await evaluate('document.querySelector(".anat h4").textContent.startsWith("Signed, and checked")'), "paged and signed on the drawn Cardputer's keys: the passkey signed, and the page verified it");
   check(await evaluate('[...document.querySelectorAll(".checks li")].every(li => li.classList.contains("yes"))'),
     "every check passed: " + await evaluate('[...document.querySelectorAll(".checks li")].map(li => li.textContent).join(", ")'));
   check(await evaluate('document.getElementById("log").textContent.includes("= signed")'), "the emulator says = signed");
@@ -108,7 +129,7 @@ try {
   await evaluate('document.getElementById("log").replaceChildren()');
   await evaluate('document.getElementById("send").click()');
   await until('document.getElementById("c-verdict").classList.contains("differ")', "the mismatch");
-  for (let i = 0; i < 4; i++) await press("/", "Slash");
+  for (let i = 0; i < 4; i++) await press("/", "Slash"); // the computer's keyboard this time
   await press("Enter", "Enter");
   await sleep(400);
   check(!(await evaluate('document.getElementById("log").textContent.includes("= sign ")')), "a wrong claim: Enter on the red hash page doesn't sign");

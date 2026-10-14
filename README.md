@@ -1,4 +1,4 @@
-# Cardputer signer
+# diykey
 
 A hardware signer for [Safe](https://safe.global) multisig wallets on Ethereum and chains like it,
 made from parts you can buy: an M5Stack Cardputer (ESP32-S3) and an ATECC608 secure element on its
@@ -8,6 +8,11 @@ hash.
 
 This repository is how I built mine: the parts and the wiring, the firmware, and a log of what ran.
 
+**Try it without building anything: [diykey.app](https://diykey.app).** The same firmware code runs
+in your browser as an emulator, with your passkey (iPhone, Android, Mac, Windows, a security key) as
+its key in place of the ATECC608. It works out the hash, shows every page, and your passkey signs
+only that hash. How a passkey compares with the chip: [docs/PASSKEY.md](docs/PASSKEY.md).
+
 | | | | |
 |---|---|---|---|
 | <img src="docs/screens/idle.png" width="200" alt="Idle: the ATECC608A's serial number, waiting for a transaction over USB"> | <img src="docs/screens/eth-send-base-sepolia-1.png" width="200" alt="Send 1.5 ETH on Base Sepolia, with the recipient's blockie"> | <img src="docs/screens/unlimited-approve-1.png" width="200" alt="A red page: approve UNLIMITED USDC"> | <img src="docs/screens/eth-send-base-sepolia-tampered-3.png" width="200" alt="The hash page in red: not the computer's hash, don't sign"> |
@@ -15,9 +20,10 @@ This repository is how I built mine: the parts and the wiring, the firmware, and
 
 The screens are drawn on a laptop by the same code the device runs (`cargo run --example screens`).
 
-> **An experiment. Testnet only. Not audited.** It can't sign yet (milestone 3). The key can't leave
-> the chip, but the firmware isn't locked down: there is no secure boot, so anyone with the cable
-> could flash firmware that shows one thing and signs another.
+> **An experiment. Testnet only. Not audited.** The Cardputer can't sign yet (milestone 3); the
+> emulator signs with a passkey, and nothing is sent to a Safe yet. The chip's key can't leave the
+> chip, but the firmware isn't locked down: there is no secure boot, so anyone with the cable could
+> flash firmware that shows one thing and signs another.
 
 ## How it works
 
@@ -100,21 +106,31 @@ On the device: Enter or `/` for the next page, `,` for the one before, Del to re
 
 ### Or use the web page
 
-`web/` is a page that sends the demo transactions to the Cardputer over USB, shows the hash it works
-out next to the one the page claims, draws every page the device will show, and can flash the
-firmware. It runs in Chrome or Edge (Web Serial), from your own computer:
+`web/` is the page at [diykey.app](https://diykey.app). It sends the demo transactions to a signer,
+shows the hash the signer works out next to the one the page claims, and draws every page it shows.
+The signer is either:
+- **the emulator**: `core` compiled to WebAssembly (`wasm/`), the same code as the firmware, with a
+  passkey as its key. On the last page, Enter asks the passkey to sign the hash the emulator worked
+  out, and the page checks the signature. It runs in any current browser, phones included.
+- **your Cardputer over USB** (Chrome or Edge, Web Serial). The page can flash the firmware too.
+
+To run it on your own computer:
 
 ```sh
-./web/build.sh                              # the screen images and the firmware image
+./web/build.sh                              # the screens, the emulator and the firmware image
 python3 -m http.server 8642 --bind 127.0.0.1
-# then open http://127.0.0.1:8642/web/
+# then open http://localhost:8642/web/      (localhost, not 127.0.0.1: passkeys need a name)
 ```
 
 It loads nothing from anywhere else (its Content-Security-Policy says so). The browser works out the
-Safe hash itself (`web/lib/safe.js`) and claims it. The Cardputer works out its own and only
-compares. `node web/test.mjs` checks the page's hash and blockies against the vectors. Flashing uses
-Espressif's esptool-js, pinned in `web/vendor/esptool-js/` with its checksums. The image's SHA-256 is
-checked before writing.
+Safe hash itself (`web/lib/safe.js`) and claims it; the signer works out its own and only compares.
+`node web/test.mjs` checks the page's hash, blockies and passkey checks against the vectors, and the
+emulator through its states. `node web/e2e.mjs` runs the emulator and a passkey end to end in
+Chrome, with Chrome's virtual authenticator. Flashing uses Espressif's esptool-js, pinned in
+`web/vendor/esptool-js/` with its checksums; the image's SHA-256 is checked before writing.
+
+GitHub Actions builds the site from source on every push to main and deploys it to diykey.app
+(`.github/workflows/site.yml`).
 
 ## What was checked
 
@@ -137,7 +153,8 @@ Where the vectors come from: [vectors/SOURCE.md](vectors/SOURCE.md).
 | `core/` | everything that isn't hardware, `no_std` and no heap: the Safe hash, the ATECC608's packets (read commands only), blockies, the fonts, a framebuffer and the screens. It runs on the laptop. |
 | `firmware/` | the Cardputer: the panel (SPI), the chip (I2C), the keyboard, lines over USB. It draws with `core`. |
 | `host/send.py` | sends a transaction from the computer and prints what the device says |
-| `web/` | a page that sends the demo transactions over USB and flashes the firmware (Chrome or Edge) |
+| `web/` | the page at diykey.app: the emulator, the Cardputer over USB, and flashing |
+| `wasm/` | the emulator: `core` in WebAssembly, the firmware's states, a passkey as its key |
 | `vectors/` | test vectors from outside this code |
 | `fonts/` | Atkinson Hyperlegible Next and Mono as 4-bit bitmaps (SIL OFL 1.1, `fonts/OFL.txt`) |
 | `hardware/` | the parts, the wiring diagram, and later a case |

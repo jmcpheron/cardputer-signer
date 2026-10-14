@@ -1,0 +1,101 @@
+# Builds diykey.app from source and deploys it to GitHub Pages: the page, the emulator (core in
+# WebAssembly), the screens and the firmware image. Pull requests build and test; main deploys.
+# Every action is pinned by commit, and espup and espflash by SHA-256 (GitHub's digests agree).
+name: site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RUST: "1.99.0"
+  ESP_TOOLCHAIN: "1.97.0.0"
+  ESPUP_SHA256: 32d0cc5a0d1a48be4d374e62de0a3c4f22307d43a5fcc0d06195854e064253b6
+  ESPFLASH_SHA256: c4fcfa32ddc3155608f003a230e6f3c184eff9641ec9cfa8eb54f1b515d403e7
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Rust, with the WebAssembly target
+        run: |
+          rustup toolchain install "$RUST" --profile minimal --target wasm32-unknown-unknown
+          rustup default "$RUST"
+
+      - name: espup and espflash, checked by SHA-256
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL -o "$HOME/.local/bin/espup" https://github.com/esp-rs/espup/releases/download/v0.18.0/espup-x86_64-unknown-linux-gnu
+          echo "$ESPUP_SHA256  $HOME/.local/bin/espup" | sha256sum -c
+          curl -sSfL -o espflash.zip https://github.com/esp-rs/espflash/releases/download/v4.6.0/espflash-x86_64-unknown-linux-gnu.zip
+          echo "$ESPFLASH_SHA256  espflash.zip" | sha256sum -c
+          unzip -q espflash.zip -d "$HOME/.local/bin" && rm espflash.zip
+          chmod +x "$HOME/.local/bin/espup" "$HOME/.local/bin/espflash"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: The ESP32-S3 toolchain, cached
+        id: esp-cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: |
+            ~/.rustup/toolchains/esp
+            ~/export-esp.sh
+          key: esp-${{ env.ESP_TOOLCHAIN }}-espup-0.18.0-esp32s3
+
+      - name: Install the ESP32-S3 toolchain
+        if: steps.esp-cache.outputs.cache-hit != 'true'
+        run: espup install --targets esp32s3 --toolchain-version "$ESP_TOOLCHAIN"
+
+      - name: core's tests
+        run: cd core && cargo test --locked
+
+      - name: Build the screens, the emulator and the firmware image
+        run: ./web/build.sh
+
+      - name: The page's tests (hash, blockies, passkey, emulator)
+        run: node web/test.mjs
+
+      - name: The emulator and a passkey, end to end in Chrome
+        run: node web/e2e.mjs
+        env:
+          CHROME: /usr/bin/google-chrome
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site/vectors
+          cp -r web/index.html web/app.js web/style.css web/lib web/vendor web/screens web/emu web/firmware _site/
+          cp vectors/safe_tx.json _site/vectors/
+          echo diykey.app > _site/CNAME
+          (cd _site && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          cat _site/firmware/firmware.json
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

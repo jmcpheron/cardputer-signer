@@ -1,6 +1,10 @@
-// The page: demo transactions, sent to the Cardputer over Web Serial, and the firmware flashed with
-// esptool-js. Everything it loads is in this folder or the repository's vectors/.
+// The page: demo transactions, sent to a signer, and the firmware flashed with esptool-js. The
+// signer is either the emulator (the signer's core in WebAssembly, with a passkey as its key) or a
+// Cardputer over Web Serial. Both answer in the same lines (core/src/proto.rs), so one handler
+// reads both. Everything the page loads is in this folder or the repository's vectors/.
 import { canvas as blockie } from "./lib/blockies.js";
+import { load as loadEmu } from "./lib/emu.js";
+import * as passkey from "./lib/passkey.js";
 import { fields, safeTxHash, tamper as tampered, txLine } from "./lib/safe.js";
 
 const $ = (id) => document.getElementById(id);
@@ -18,9 +22,10 @@ const CHAINS = {
 const LEVEL = { ok: "Plain", warn: "Careful", red: "Red" };
 
 const st = {
-  vectors: [], reviews: {}, sel: null, page: 0, tamper: false, filter: "all",
+  mode: "emu", vectors: [], reviews: {}, sel: null, page: 0, tamper: false, filter: "all",
   port: null, reader: null, reading: null, lineBuf: "",
-  pending: null, // { name, claimed, device, pages, done }
+  emu: null, key: passkey.saved(), signing: false,
+  pending: null, // { name, claimed, device, pages, done, signed }
   firmware: null, flashing: false,
 };
 
@@ -61,6 +66,60 @@ function hashNode(h) {
   const f = document.createDocumentFragment();
   f.append(document.createTextNode(h.slice(0, -8)), el("span", "tail", h.slice(-8)));
   return f;
+}
+const emuMode = () => st.mode === "emu";
+const signerName = () => (emuMode() ? "the emulator" : "the Cardputer");
+
+// ------------------------------------------------------------------ the mode
+const LEDE = {
+  emu: "Send a demo Safe transaction to the emulator: the Cardputer's own code, running in this page, with your passkey as its key. It rebuilds the transaction's hash from its fields, shows you what it does, and only compares the hash this page claims. Page through it, then Enter on the last page signs with your passkey. A wrong claim turns it red, and it won't sign.",
+  usb: "Send a demo Safe transaction to your Cardputer over USB. The Cardputer rebuilds the transaction's hash from its fields, shows you what it does, and only compares the hash this page claims. A wrong claim turns it red.",
+};
+
+function setMode(m) {
+  st.mode = m;
+  const emu = emuMode();
+  for (const b of $("modes").children) b.classList.toggle("on", b.dataset.m === m);
+  document.body.classList.toggle("is-emu", emu);
+  $("lede").textContent = LEDE[m];
+  $("usb-label").textContent = emu ? "in this page" : "USB";
+  $("grove-label").textContent = emu ? "WebAuthn" : "Grove";
+  $("card-label").textContent = emu ? "Emulator" : "Cardputer";
+  $("chip-text").textContent = emu ? "P-256" : "608";
+  $("chip-label").textContent = emu ? "Your passkey" : "ATECC608";
+  $("chip-sub").textContent = emu ? "a virtual ATECC608: P-256, can't be exported" : "the key, made inside, never leaves";
+  $("step4-title").textContent = emu ? "Your passkey signs" : "The chip signs";
+  $("step4-sub").textContent = emu ? "Enter on the last page: the passkey signs the emulator's hash, and nothing else."
+    : "Milestone 3: the chip signs that hash, and nothing else.";
+  $("steps").lastElementChild.classList.toggle("future", !emu);
+  $("send-title").textContent = `Send it to ${signerName()}`;
+  $("send").textContent = emu ? "Send to the emulator" : "Send to the Cardputer";
+  $("c-device-k").textContent = emu ? "The emulator worked out" : "The Cardputer worked out";
+  $("connect").hidden = emu;
+  $("emu-screen").hidden = !emu;
+  $("d-screen").hidden = emu;
+  $("emu-keys").hidden = !emu;
+  $("pager").hidden = emu;
+  $("d-caption").textContent = emu
+    ? "Live: the signer's core in WebAssembly. Keys: , and / page, Enter, Del (or Backspace)."
+    : "Drawn on the laptop by the firmware's own code, pixel for pixel.";
+  $("pk").hidden = !emu;
+  $("sig").hidden = emu;
+  for (const id of ["t-fw", "t-chip", "t-locks", "t-counter"]) $(id).textContent = "—";
+  $("flow").classList.remove("haschip");
+  st.pending = null;
+  if (emu) {
+    connState("on", "Emulator");
+    if (st.emu) emuLines(st.emu.boot());
+    renderPasskey();
+    drawEmu();
+  } else {
+    connState(st.port ? "on" : "off", st.port ? "Connected" : "Not connected");
+    $("flow-screen").setAttribute("href", "screens/idle.png");
+    if (st.port) send("ping");
+  }
+  resetSend();
+  if (st.sel) renderScreen();
 }
 
 // ------------------------------------------------------------------ the list
@@ -136,7 +195,7 @@ function renderDetail() {
   $("a-blockie").replaceChildren(blockie(h.hash, 34));
   const agrees = h.hash === v.safeTxHash.toLowerCase();
   $("a-note").textContent = agrees
-    ? `Worked out in this browser just now; it agrees with the vector's published hash${v.name.startsWith("real") ? ", which came from Safe's transaction service for a transaction executed on Ethereum mainnet" : ""}. The Cardputer works it out again on its own.`
+    ? `Worked out in this browser just now; it agrees with the vector's published hash${v.name.startsWith("real") ? ", which came from Safe's transaction service for a transaction executed on Ethereum mainnet" : ""}. The signer works it out again on its own.`
     : "This browser's hash differs from the vector's. Something is wrong with this page.";
   renderScreen();
   renderLine();
@@ -146,6 +205,7 @@ function screenPages() {
   return st.reviews[st.sel.name].pages;
 }
 function renderScreen() {
+  if (emuMode()) return drawEmu();
   const n = screenPages();
   const last = st.page === n - 1;
   const name = last && st.tamper ? `${st.sel.name}-tampered-${n}` : `${st.sel.name}-${st.page + 1}`;
@@ -175,12 +235,133 @@ function renderLine() {
     s.append(document.createTextNode(" "), el("span", "k", k + "="), el("span", "v", v));
     pre.append(s);
   }
-  // this page's claim
   const c = $("c-claim");
   c.classList.toggle("claim-bad", st.tamper);
   c.querySelector(".side-blockie").replaceChildren(blockie(claimed(), 34));
   c.querySelector(".code").textContent = claimed().slice(-8);
   c.querySelector(".side-full").replaceChildren(hashNode(claimed()));
+}
+
+// ------------------------------------------------------------------ the emulator
+function drawEmu() {
+  if (!st.emu) return;
+  const c = $("emu-screen");
+  c.getContext("2d").putImageData(new ImageData(st.emu.pixels(), st.emu.w, st.emu.h), 0, 0);
+  $("flow-screen").setAttribute("href", c.toDataURL());
+}
+/** Lines from the emulator, read like the Cardputer's. */
+function emuLines(lines) {
+  for (const l of lines) onLine(l);
+  drawEmu();
+}
+function emuKey(name) {
+  if (!st.emu || !emuMode() || st.signing) return;
+  emuLines(st.emu.key(name));
+}
+
+// ------------------------------------------------------------------ the passkey
+function renderPasskey() {
+  const pk = $("pk");
+  pk.replaceChildren();
+  const head = el("div", "pk-head");
+  const k = st.key;
+  if (!k) {
+    head.append(el("div", "pk-icon", "🔑"));
+    const t = el("div");
+    t.append(el("b", "", "Make a passkey to sign"),
+      el("p", "", "A new passkey for this site, made by your phone or computer (Face ID, Touch ID, Windows Hello, or a security key). It is the emulator's key, in place of the ATECC608: P-256, made inside your authenticator, and it can't be exported."));
+    head.append(t);
+    const b = el("button", "btn btn-primary", "Make a passkey");
+    b.addEventListener("click", makePasskey);
+    head.append(b);
+    pk.append(head);
+    if (!window.PublicKeyCredential) pk.append(el("p", "pk-note bad", "This browser has no passkeys (WebAuthn)."));
+    return;
+  }
+  head.append(blockie(k.id, 34));
+  const t = el("div");
+  t.append(el("b", "", `Passkey ${k.id.slice(0, 4)} ${k.id.slice(4, 8)}`), el("p", "", `P-256 public key x ${k.x.slice(0, 10)}…  y ${k.y.slice(0, 10)}…`));
+  head.append(t);
+  const f = el("button", "btn btn-ghost", "Forget");
+  f.title = "Forget this passkey in this page. It stays in your keychain.";
+  f.addEventListener("click", () => { passkey.forget(); st.key = null; if (st.emu) emuLines(st.emu.setPasskey(null)); renderPasskey(); });
+  head.append(f);
+  pk.append(head);
+  pk.append(el("p", "pk-note", "Page through a transaction on the emulator; on the last page, Enter asks your passkey to sign the hash the emulator worked out."));
+  if (st.lastSig) pk.append(sigAnatomy(st.lastSig));
+}
+
+async function makePasskey() {
+  try {
+    st.key = await passkey.create();
+    log("sys", `passkey made: ${st.key.id.slice(0, 16)}…`);
+    if (st.emu) emuLines(st.emu.setPasskey(st.key.id));
+  } catch (e) {
+    log("sys", `passkey: ${e.name}: ${e.message}`);
+    status(e.name === "NotAllowedError" ? "No passkey made (cancelled)." : `Couldn't make a passkey: ${e.message}`, "bad");
+  }
+  renderPasskey();
+}
+
+/** The emulator asked to sign `hash`, the one it worked out. Runs inside the key press: Safari
+ * shows a passkey prompt only from one. */
+function startSign(hash) {
+  const p = st.pending;
+  if (!st.key || !p || hash !== p.device) {
+    // never sign a hash the emulator didn't just show
+    emuLines(st.emu.signResult(false));
+    return;
+  }
+  st.signing = true;
+  steps({ 1: "done", 2: "done", 3: "done", 4: "active" });
+  flow("chip");
+  status("Your passkey is asking: confirm to sign the emulator's hash.");
+  passkey.sign(hash, st.key)
+    .then((a) => passkey.verify({ ...a, x: passkey.fromHex(st.key.x), y: passkey.fromHex(st.key.y), hash,
+      rpId: location.hostname, origin: location.origin }))
+    .then((v) => {
+      st.lastSig = { ...v, hash };
+      log(v.ok ? "in" : "in bad", `passkey signature ${v.ok ? "verified" : "FAILED: " + v.checks.filter(([, ok]) => !ok).map(([k]) => k).join(", ")}`);
+      st.signing = false;
+      emuLines(st.emu.signResult(v.ok));
+      renderPasskey();
+    })
+    .catch((e) => {
+      log("sys", `passkey: ${e.name}: ${e.message}`);
+      st.signing = false;
+      emuLines(st.emu.signResult(false));
+      status(e.name === "NotAllowedError" ? "Not signed: the passkey prompt was cancelled. Enter tries again; Del rejects." : `Not signed: ${e.message}`, "bad");
+    });
+}
+
+function sigAnatomy(v) {
+  const box = el("div", "anat");
+  box.append(el("h4", "", v.ok ? "Signed, and checked in this page" : "The signature didn't check out"));
+  const checks = el("ul", "checks");
+  for (const [k, ok] of v.checks) checks.append(el("li", ok ? "yes" : "no", (ok ? "✓ " : "✗ ") + k));
+  box.append(checks);
+  const grid = el("dl", "anat-grid");
+  const row = (k, node, cls) => { const dd = el("dd", cls); dd.append(node); grid.append(el("dt", "", k), dd); };
+  const ch = el("code");
+  const i = v.client.indexOf(v.challenge);
+  ch.append(document.createTextNode(v.client.slice(0, i)), el("b", "", v.challenge), document.createTextNode(v.client.slice(i + v.challenge.length)));
+  row("clientDataJSON", ch);
+  row("challenge", el("code", "", `base64url of the emulator's hash ${v.hash.slice(0, 10)}…${v.hash.slice(-8)}`));
+  row("flags", el("code", "", `0x${v.flags.toString(16).padStart(2, "0")}: ${v.flags & 1 ? "UP " : ""}${v.flags & 4 ? "UV " : ""}${v.flags & 8 ? "BE " : ""}${v.flags & 16 ? "BS (synced)" : ""}`));
+  row("signed message", el("code", "", `authenticatorData ‖ sha256(clientDataJSON), ${v.message.length / 2} bytes`));
+  row("r", el("code", "", v.r));
+  row("s", el("code", "", v.s + "  (low-s)"));
+  box.append(grid);
+  if (v.safe) {
+    const d = el("details", "safe-enc");
+    d.append(el("summary", "", "As Safe's passkey signer reads it: abi.encode(authenticatorData, clientDataFields, r, s)"),
+      el("code", "", v.safe), el("p", "fine", "Not yet checked against a Safe onchain. That comes with a Safe owner for the passkey."));
+    box.append(d);
+  }
+  if (v.flags & 16) {
+    box.append(el("p", "pk-note", "This passkey is synced (BS): its key is copied, encrypted, to your other devices. The chip's key never leaves the chip."));
+  }
+  return box;
 }
 
 // ------------------------------------------------------------------ the steps and the result
@@ -199,7 +380,7 @@ function status(text, kind = "") {
 }
 function flow(cls) {
   const f = $("flow");
-  f.classList.remove("tx", "rx");
+  f.classList.remove("tx", "rx", "chip");
   if (cls) f.classList.add(cls);
 }
 function resetSend() {
@@ -214,8 +395,9 @@ function resetSend() {
   vd.className = "verdict";
   vd.querySelector(".verdict-icon").textContent = "?";
   vd.querySelector(".verdict-text").textContent = "waiting";
-  status(st.port ? "Ready. The Cardputer should show its idle screen." : "Connect the Cardputer to send.");
-  $("flow-screen").setAttribute("href", "screens/idle.png");
+  if (emuMode()) status(st.emu ? "Ready: the emulator is on its idle screen." : "Loading the emulator…");
+  else status(st.port ? "Ready. The Cardputer should show its idle screen." : "Connect the Cardputer to send.");
+  if (!emuMode()) $("flow-screen").setAttribute("href", "screens/idle.png");
   updateButtons();
 }
 
@@ -235,38 +417,46 @@ function showDeviceHash(h) {
   const honest = h === st.hash.hash;
   steps({ 1: "done", 2: honest ? "done" : "fail", 3: "active" });
   flow();
+  const who = emuMode() ? "The emulator" : "The Cardputer";
   if (same) {
-    status(`The Cardputer worked out the same hash. Page through it on the device: ${p.pages || "its"} pages. Del rejects.`, "good");
+    status(`${who} worked out the same hash. Page through it ${emuMode() ? "with › or /" : "on the device"}: ${p.pages || "its"} pages. ${emuMode() && st.key ? "Enter on the last page signs. " : ""}Del rejects.`, "good");
   } else if (honest) {
-    status("The Cardputer worked out the real hash and saw this page's claim is wrong. Its hash page is red: it says don't sign. Del rejects.", "bad");
+    status(`${who} worked out the real hash and saw this page's claim is wrong. Its hash page is red: it says don't sign, and it won't. Del rejects.`, "bad");
   } else {
-    status("The Cardputer's hash is different from the one this browser worked out. Don't trust either until you know why.", "bad");
+    status(`${who}'s hash is different from the one this browser worked out. Don't trust either until you know why.`, "bad");
   }
-  // the device's screen, in the picture: its first page, then the hash page once it's shown
-  $("flow-screen").setAttribute("href", `screens/${p.name}-1.png`);
+  if (!emuMode()) $("flow-screen").setAttribute("href", `screens/${p.name}-1.png`);
 }
 
-// ------------------------------------------------------------------ lines from the Cardputer
+// ------------------------------------------------------------------ lines from the signer
 function onLine(line) {
   line = line.replace(/\r$/, "");
   if (!line.trim()) return;
   const reply = line.startsWith("= ");
-  log(reply ? (/^= (error|mismatch|busy)/.test(line) ? "in bad" : "in") : "dev", line);
+  log(reply ? (/^= (error|mismatch|busy|not signed)/.test(line) ? "in bad" : "in") : "dev", line);
 
   let m;
   if ((m = line.match(/^cardputer-signer: (.+)$/)) || (m = line.match(/^= pong (cardputer-signer .+)$/))) {
-    $("t-fw").textContent = m[1].replace(/^cardputer-signer /, "").replace(/^m(\d)$/, "milestone $1");
-    connState("on", "Connected");
+    const what = m[1].replace(/^cardputer-signer /, "");
+    $("t-fw").textContent = what === "emulator" ? "emulator (WebAssembly)" : what.replace(/^m(\d)$/, "milestone $1").replace(/^milestone (\d)$/, "milestone $1");
+    if (!emuMode()) connState("on", "Connected");
   }
   if ((m = line.match(/^chip: serial \[([0-9a-f, ]+)\] revision \[([0-9a-f, ]+)\] config locked (\w+) data locked (\w+) counter0 (\d+)/))) {
     const serial = m[1].replace(/[ ,]/g, ""), rev = m[2].replace(/[ ,]/g, "");
     const model = rev.endsWith("6002") ? "ATECC608A" : rev.endsWith("6003") ? "ATECC608B" : "ATECC608";
-    const v = $("t-chip");
-    v.replaceChildren(blockie(serial, 26), el("span", "", model), el("code", "", serial.match(/.{1,4}/g).join(" ")));
+    $("t-chip").replaceChildren(blockie(serial, 26), el("span", "", model), el("code", "", serial.match(/.{1,4}/g).join(" ")));
     $("t-locks").textContent = `config ${m[3] === "true" ? "locked" : "open"} · data ${m[4] === "true" ? "locked" : "open"}`;
     $("t-counter").textContent = m[5];
     $("flow").classList.add("haschip");
     pulseChip();
+  } else if ((m = line.match(/^chip: passkey ([0-9a-f]+)/))) {
+    $("t-chip").replaceChildren(blockie(m[1], 26), el("span", "", "Passkey"), el("code", "", `${m[1].slice(0, 4)} ${m[1].slice(4, 8)} · P-256`));
+    $("t-locks").textContent = "can't be exported";
+    $("t-counter").textContent = st.lastSig ? String(st.lastSig.counter) : "—";
+    $("flow").classList.add("haschip");
+  } else if (line.startsWith("chip: no key")) {
+    $("t-chip").replaceChildren(el("span", "", "No passkey yet"), el("span", "muted", "make one below to sign"));
+    $("flow").classList.remove("haschip");
   } else if (line.startsWith("chip: no answer")) {
     $("t-chip").replaceChildren(el("span", "", "No chip at 0x60"), el("span", "muted", "check the Grove wiring"));
     $("flow").classList.remove("haschip");
@@ -275,7 +465,7 @@ function onLine(line) {
   }
 
   const p = st.pending;
-  if (!p || p.done) return;
+  if (!p || (p.done && !p.device)) return;
   if ((m = line.match(/^= hash (0x[0-9a-fA-F]+)/))) {
     clearTimeout(p.timer);
     if (m[1].length !== 66) {
@@ -286,27 +476,39 @@ function onLine(line) {
   } else if ((m = line.match(/^tx: (.*) \((\d+) pages\)$/))) {
     p.pages = Number(m[2]);
     if (p.device && p.device === p.claimed) {
-      status(`The Cardputer worked out the same hash. Page through it on the device: ${p.pages} pages. Del rejects.`, "good");
+      status(`${emuMode() ? "The emulator" : "The Cardputer"} worked out the same hash. Page through it ${emuMode() ? "with › or /" : "on the device"}: ${p.pages} pages. ${emuMode() && st.key ? "Enter on the last page signs. " : ""}Del rejects.`, "good");
     }
+  } else if ((m = line.match(/^= sign (0x[0-9a-f]{64})$/))) {
+    startSign(m[1]);
+  } else if (line === "= signed") {
+    p.done = true;
+    p.signed = true;
+    steps({ 1: "done", 2: "done", 3: "done", 4: "done" });
+    flow();
+    status("Signed by your passkey over the emulator's hash, and the signature checked out in this page. Enter on the emulator goes back.", "good");
+    updateButtons();
+  } else if (line === "= not signed") {
+    steps({ 1: "done", 2: "done", 3: "active" });
+    flow();
   } else if (line === "= rejected") {
     p.done = true;
     steps({ 1: "done", 2: p.device === st.hash.hash ? "done" : "fail", 3: "done" });
-    status("Rejected on the Cardputer. Nothing was signed; the key wasn't used.", "");
-    $("flow-screen").setAttribute("href", "screens/rejected.png");
+    status(`Rejected on ${signerName()}. Nothing was signed; the key wasn't used.`, "");
+    if (!emuMode()) $("flow-screen").setAttribute("href", "screens/rejected.png");
     updateButtons();
   } else if (line === "= busy") {
     clearTimeout(p.timer);
     p.done = true;
     steps({ 1: "fail" });
     flow();
-    status("A transaction is already on the Cardputer's screen. Press Del there to reject it, then send again.", "bad");
+    status(`A transaction is already on ${signerName()}'s screen. Press Del there to reject it, then send again.`, "bad");
     updateButtons();
   } else if ((m = line.match(/^= error (.*)$/))) {
     clearTimeout(p.timer);
     p.done = true;
     steps({ 1: "fail" });
     flow();
-    status(`The Cardputer refused it: ${m[1]}.`, "bad");
+    status(`${emuMode() ? "The emulator" : "The Cardputer"} refused it: ${m[1]}.`, "bad");
     updateButtons();
   }
 }
@@ -323,10 +525,10 @@ function connState(kind, text) {
   $("conn-text").textContent = text;
 }
 function updateButtons() {
-  const open = !!st.port && !st.flashing;
+  const ready = emuMode() ? !!st.emu : !!st.port && !st.flashing;
   const busy = st.pending && !st.pending.done;
-  $("send").disabled = !open || !st.sel || busy;
-  $("raw-send").disabled = !open;
+  $("send").disabled = !ready || !st.sel || busy;
+  $("raw-send").disabled = !ready;
   $("connect").textContent = st.port ? "Disconnect" : "Connect over USB";
   $("connect").disabled = st.flashing;
   $("flash-btn").disabled = !st.firmware || !$("fw-ok").checked || st.flashing || !("serial" in navigator);
@@ -336,16 +538,18 @@ async function openPort(port) {
   await port.open({ baudRate: 115200 });
   st.port = port;
   st.lineBuf = "";
-  connState("on", "Connected");
   log("sys", "port open");
-  if (!$("flow").classList.contains("haschip")) {
-    // it prints the chip only at start-up, or on Enter at its idle screen; opening the port doesn't reset it
-    $("t-chip").replaceChildren(el("span", "muted", "press Enter on the Cardputer's idle screen to read it"));
-  }
   st.reading = readLoop(port);
+  if (!emuMode()) {
+    connState("on", "Connected");
+    if (!$("flow").classList.contains("haschip")) {
+      // it prints the chip only at start-up, or on Enter at its idle screen; opening the port doesn't reset it
+      $("t-chip").replaceChildren(el("span", "muted", "press Enter on the Cardputer's idle screen to read it"));
+    }
+    resetSend();
+    await send("ping");
+  }
   updateButtons();
-  resetSend();
-  await send("ping");
 }
 
 async function readLoop(port) {
@@ -361,7 +565,7 @@ async function readLoop(port) {
         while ((i = st.lineBuf.indexOf("\n")) >= 0) {
           const line = st.lineBuf.slice(0, i);
           st.lineBuf = st.lineBuf.slice(i + 1);
-          onLine(line);
+          if (!emuMode()) onLine(line);
         }
       }
     } catch (e) {
@@ -380,18 +584,27 @@ async function closePort() {
   try { await st.reader?.cancel(); } catch { /* already gone */ }
   try { await st.reading; } catch { /* done */ }
   try { await port.close(); } catch { /* unplugged */ }
-  connState("off", "Not connected");
+  if (!emuMode()) connState("off", "Not connected");
   log("sys", "port closed");
   updateButtons();
   return port;
 }
 
+/** One line to the signer: the emulator, or the Cardputer over USB. */
 async function send(line) {
+  const shown = "> " + (line.length > 160 ? line.slice(0, 160) + "…" : line);
+  if (emuMode()) {
+    if (!st.emu) return;
+    log("out", shown);
+    // after the caller has set up, as a Cardputer's reply comes after the write
+    queueMicrotask(() => emuLines(st.emu.send(line)));
+    return;
+  }
   if (!st.port?.writable) return;
   const w = st.port.writable.getWriter();
   try {
     await w.write(new TextEncoder().encode(line + "\n"));
-    log("out", "> " + (line.length > 160 ? line.slice(0, 160) + "…" : line));
+    log("out", shown);
   } finally {
     w.releaseLock();
   }
@@ -415,11 +628,12 @@ async function sendTx() {
   steps({ 1: "active" });
   flow("tx");
   status("Sending the fields…");
+  if (emuMode()) $("emu-screen").focus(); // so Enter and the page keys go to the emulator
   await send(txLine(fields(v), p.claimed));
   if (p.done || p.device) return; // the answer came back before the write finished
   steps({ 1: "done", 2: "active" });
   flow("rx");
-  status("Waiting for the Cardputer's hash…");
+  status(`Waiting for ${signerName()}'s hash…`);
   p.timer = setTimeout(() => {
     if (p.device || p.done) return;
     p.done = true;
@@ -499,30 +713,49 @@ async function flash() {
   } catch (e) {
     stage(`Stopped: ${e.message}`);
     log("sys", `flash: ${e.message}`);
-    connState("off", "Not connected");
+    if (!emuMode()) connState("off", "Not connected");
     try { await transport?.disconnect(); } catch { /* gone */ }
   } finally {
     st.flashing = false;
+    if (emuMode()) connState("on", "Emulator");
     updateButtons();
   }
 }
 
 // ------------------------------------------------------------------ start
+const KEYMAP = { ",": "left", ArrowLeft: "left", "/": "right", ArrowRight: "right", ";": "up", ArrowUp: "up",
+  ".": "down", ArrowDown: "down", Enter: "enter", Backspace: "del", Delete: "del", Escape: "del" };
+
 async function main() {
-  if (!("serial" in navigator)) $("no-serial").hidden = false;
-  const [vec, reviews] = await Promise.all([
+  if (!("serial" in navigator)) {
+    $("no-serial").hidden = false;
+    $("modes").querySelector('[data-m="usb"]').disabled = true;
+  }
+  loadFirmware();
+  const [vec, reviews, wasm] = await Promise.all([
     fetch("../vectors/safe_tx.json").then((r) => r.json()),
     fetch("screens/reviews.json").then((r) => r.json()).catch(() => null),
+    fetch("emu/signer.wasm").then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null),
   ]);
   if (!reviews) {
     $("detail").replaceChildren(el("p", "warn", "The screens aren't built yet: run web/build.sh, then reload."));
     return;
   }
-  loadFirmware();
   st.vectors = vec.vectors;
   st.reviews = reviews;
+  if (wasm) {
+    st.emu = await loadEmu(wasm);
+    if (st.key) st.emu.setPasskey(st.key.id);
+  } else {
+    log("sys", "the emulator isn't built: run web/build.sh");
+  }
   select(st.vectors.find((v) => v.name === "eth-send-base-sepolia") || st.vectors[0]);
+  setMode(st.emu ? "emu" : "usb");
 
+  $("modes").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (b && !b.disabled && b.dataset.m !== st.mode) setMode(b.dataset.m);
+  });
   $("filters").addEventListener("click", (e) => {
     const b = e.target.closest("button");
     if (!b) return;
@@ -532,6 +765,7 @@ async function main() {
   });
   $("pg-prev").addEventListener("click", () => { st.page = Math.max(0, st.page - 1); renderScreen(); });
   $("pg-next").addEventListener("click", () => { st.page = Math.min(screenPages() - 1, st.page + 1); renderScreen(); });
+  $("emu-keys").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) emuKey(b.dataset.k); });
   $("tamper").addEventListener("change", (e) => {
     st.tamper = e.target.checked;
     st.page = screenPages() - 1; // show what the device does with it: the hash page
@@ -550,17 +784,22 @@ async function main() {
   $("fw-ok").addEventListener("change", updateButtons);
   $("flash-btn").addEventListener("click", flash);
   document.addEventListener("keydown", (e) => {
-    if (e.target.closest("input, textarea")) return;
+    if (e.target.closest("input, textarea, summary")) return;
+    // Enter and Space on a button press it, the emulator's on-screen keys included
+    if ((e.key === "Enter" || e.key === " ") && e.target.closest("button, [role=button]")) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (emuMode()) {
+      const k = KEYMAP[e.key];
+      if (k) { e.preventDefault(); emuKey(k); }
+      return;
+    }
     if (e.key === "ArrowRight") $("pg-next").click();
     if (e.key === "ArrowLeft") $("pg-prev").click();
   });
   if ("serial" in navigator) {
     navigator.serial.addEventListener("disconnect", (e) => {
-      if (e.target === st.port || e.port === st.port) { st.port = null; connState("off", "Unplugged"); log("sys", "unplugged"); updateButtons(); }
+      if (e.target === st.port) { st.port = null; if (!emuMode()) connState("off", "Unplugged"); log("sys", "unplugged"); updateButtons(); }
     });
-    // a port this page was given before: reopen it without asking
-    const known = (await navigator.serial.getPorts()).filter((p) => p.getInfo().usbVendorId === ESPRESSIF);
-    if (known.length === 1) openPort(known[0]).catch((e) => log("sys", `reopen: ${e.message}`));
   }
 }
 main();

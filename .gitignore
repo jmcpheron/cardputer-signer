@@ -7,3 +7,4 @@ backups/
 secrets*
 web/screens/
 web/firmware/
+web/emu/

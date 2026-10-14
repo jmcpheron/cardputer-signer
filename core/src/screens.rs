@@ -33,6 +33,8 @@ pub enum Chip {
     Missing,
     Error(atecc::Error),
     Found(ChipInfo),
+    /// The emulator's key: a passkey on P-256, named by the start of its credential id.
+    Passkey([u8; 8]),
 }
 
 /// A transaction under review: its fields, what it does, and the hash this device worked out.
@@ -243,13 +245,15 @@ fn header(f: &mut Frame, p: &Pending, page: usize) {
     f.hline(0, 18, W, LINE);
 }
 
-fn footer(f: &mut Frame, p: &Pending, page: usize) {
+fn footer(f: &mut Frame, p: &Pending, page: usize, can_sign: bool) {
     f.hline(0, FOOT - 3, W, LINE);
     key(f, "Del", "Reject", M, BAD_BAR, ON_BAD, MUTED, false);
     if page + 1 < p.pages() {
         key(f, "Enter", "Next", R, RAISED, TEXT, MUTED, true);
     } else if p.matches() == Some(false) {
         f.text_r("Can't sign this", R, FOOT, Face::Sans12, BAD, BG);
+    } else if can_sign {
+        key(f, "Enter", "Sign", R, OK, ON_OK, MUTED, true);
     } else {
         f.text_r("Signing: milestone 3", R, FOOT, Face::Sans12, FAINT, BG);
     }
@@ -290,6 +294,15 @@ pub fn idle(f: &mut Frame, chip: &Chip, last: Option<&str>) {
         Chip::Error(_) => {
             f.disc(M + 9, 36, 9, BAD_BAR);
             f.text("Chip error: review only", M + 26, 27, Face::Bold14, TEXT, BG);
+        }
+        Chip::Passkey(id) => {
+            let mut h = [0u8; 16];
+            let s = hex::encode(id, &mut h);
+            f.blockie(s.as_bytes(), M, 26, 3);
+            f.text("Passkey", M + 32, 23, Face::Bold14, TEXT, BG);
+            let mut g: Buf<24> = Buf::new();
+            let _ = write!(g, "{} {} · P-256", &s[..4], &s[4..8]);
+            f.text(g.as_str(), M + 32, 39, Face::Mono13, MUTED, BG);
         }
     }
     f.text("Waiting for a transaction", M, 62, Face::Bold18, TEXT, BG);
@@ -431,8 +444,14 @@ fn hash_page(f: &mut Frame, p: &Pending) {
     }
 }
 
-/// Page `page` of the review: an item, the fields, or the hash.
+/// Page `page` of the review: an item, the fields, or the hash. Nothing can sign here yet
+/// (milestone 3); `review_sign` is the same with a key that can.
 pub fn review(f: &mut Frame, p: &Pending, data: &[u8], page: usize) {
+    review_sign(f, p, data, page, false);
+}
+
+/// The review, with Enter to sign on the hash page when `can_sign` (the emulator's passkey).
+pub fn review_sign(f: &mut Frame, p: &Pending, data: &[u8], page: usize, can_sign: bool) {
     f.fill(BG);
     header(f, p, page);
     match p.page(page) {
@@ -449,7 +468,27 @@ pub fn review(f: &mut Frame, p: &Pending, data: &[u8], page: usize) {
         Page::Fields => fields_page(f, p, data),
         Page::Hash => hash_page(f, p),
     }
-    footer(f, p, page);
+    footer(f, p, page, can_sign);
+}
+
+/// Signed by the key, over the hash this device worked out.
+pub fn signed(f: &mut Frame, p: &Pending) {
+    f.fill(BG);
+    f.mark(true, M + 13, 17, 13);
+    let mut t: Buf<96> = Buf::new();
+    let _ = write!(t, "Signed #{}", nonce(&p.fields.nonce));
+    f.text(fit(t.as_str(), R - M - 33, Face::Bold18).as_str(), M + 33, 6, Face::Bold18, TEXT, BG);
+    let code = safe_tx::verify_code(&p.hash);
+    f.text(core::str::from_utf8(&code).unwrap_or(""), M, 36, Face::MonoB28, OK, BG);
+    let mut h = [0u8; 66];
+    h[..2].copy_from_slice(b"0x");
+    hex::encode(&p.hash, &mut h[2..]);
+    f.blockie(&h, R - 40, 34, 5);
+    f.text("Over the hash this device", M, 70, Face::Sans14, MUTED, BG);
+    f.text("worked out, and no other.", M, 87, Face::Sans14, MUTED, BG);
+    f.hline(0, FOOT - 3, W, LINE);
+    f.text(fit(p.review.summary(), R - M - 80, Face::Sans12).as_str(), M, FOOT, Face::Sans12, FAINT, BG);
+    key(f, "Enter", "Done", R, RAISED, TEXT, MUTED, true);
 }
 
 /// One press of Del: nothing signed.

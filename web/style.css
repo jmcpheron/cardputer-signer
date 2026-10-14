@@ -226,6 +226,37 @@ h3 small { text-transform: none; letter-spacing: 0; color: var(--faint); font-we
 .sig p { margin: 3px 0 0; font-size: 13.5px; }
 .sig-icon { width: 34px; height: 34px; flex: none; border-radius: 10px; display: grid; place-items: center; background: var(--raised); font-size: 17px; }
 
+/* the emulator and the passkey */
+.modes { display: flex; gap: 3px; background: var(--bg); border: 1px solid var(--line); padding: 3px; border-radius: 11px; }
+.modes button { font: inherit; font-size: 13px; font-weight: 650; color: var(--muted); background: none; border: 0; padding: 6px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.modes button.on { background: var(--raised); color: var(--text); box-shadow: inset 0 0 0 1px rgb(122 146 255 / .45); }
+.modes button:disabled { opacity: .4; cursor: not-allowed; }
+.is-emu .hw-only { display: none; }
+.device-bezel canvas { display: block; width: 100%; height: auto; aspect-ratio: 240 / 135; image-rendering: pixelated; border-radius: 3px; background: var(--bg); outline: none; }
+.device-bezel canvas:focus-visible { box-shadow: 0 0 0 3px rgb(122 146 255 / .6); }
+.emu-keys { display: grid; grid-template-columns: 1fr 1.3fr 1.3fr 1fr; gap: 8px; margin-top: 12px; }
+.emu-keys .btn { padding: 11px 0; font-size: 16px; touch-action: manipulation; }
+.pk { display: flex; flex-direction: column; gap: 14px; padding: 16px; border-radius: 14px; border: 1px solid rgb(150 90 255 / .45); background: linear-gradient(160deg, rgb(150 90 255 / .1), var(--bg) 60%); }
+.pk-head { display: flex; gap: 14px; align-items: center; }
+.pk-head > div { flex: 1; min-width: 0; }
+.pk-head p { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; overflow-wrap: anywhere; }
+.pk-icon { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--raised); font-size: 20px; }
+.pk-note { margin: 0; color: var(--muted); font-size: 13px; }
+.pk-note.bad { color: var(--bad); }
+.anat { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.anat h4 { margin: 0; font-size: 15px; }
+.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.checks li { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; background: rgb(52 199 89 / .14); color: var(--ok); font-weight: 600; }
+.checks li.no { background: rgb(200 38 38 / .18); color: var(--bad); }
+.anat-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 12.5px; }
+.anat-grid dt { color: var(--faint); }
+.anat-grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.anat-grid code { font-size: 11.5px; color: var(--muted); }
+.anat-grid code b { color: var(--ok); font-weight: 700; }
+.safe-enc summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.safe-enc code { display: block; margin-top: 8px; font-size: 11px; color: var(--faint); overflow-wrap: anywhere; max-height: 120px; overflow: auto; }
+.foot a { color: var(--muted); }
+
 /* flash */
 .flash { max-width: 1240px; margin: 28px auto 0; padding: 0 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .flash > * { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 24px; }
@@ -268,7 +299,9 @@ h3 small { text-transform: none; letter-spacing: 0; color: var(--faint); font-we
   .flash { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
-  .top { padding: 12px 16px; }
+  .top { padding: 12px 16px; flex-wrap: wrap; }
+  .conn { flex-wrap: wrap; }
+  .modes button { padding: 6px 9px; }
   .brand-sub { display: none; }
   .hero, .grid, .flash, .console, .foot { padding-left: 16px; padding-right: 16px; }
   .steps { grid-template-columns: 1fr 1fr; }

@@ -1,0 +1,19 @@
+[package]
+name = "signer-emu"
+version = "0.1.0"
+edition = "2021"
+description = "The emulator: the signer's core in WebAssembly, for web/. No dependencies but core."
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+signer-core = { path = "../core" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"

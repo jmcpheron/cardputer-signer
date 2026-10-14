@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Cardputer signer</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>diykey</title>
+<meta name="description" content="A Safe signer you build from a Cardputer and a secure element, or try here with an emulator and your passkey.">
 <link rel="stylesheet" href="style.css">
 <script type="module" src="app.js"></script>
 </head>
@@ -19,28 +20,29 @@
       <g class="mark-keys"><rect x="7" y="21" width="3" height="2" rx=".6"/><rect x="11.5" y="21" width="3" height="2" rx=".6"/><rect x="16" y="21" width="3" height="2" rx=".6"/><rect x="20.5" y="21" width="4.5" height="2" rx=".6"/></g>
     </svg>
     <div>
-      <div class="brand-name">Cardputer signer</div>
-      <div class="brand-sub">A Safe signer you build from parts</div>
+      <div class="brand-name">diykey</div>
+      <div class="brand-sub">A Safe signer you build, or try with a passkey</div>
     </div>
   </div>
   <div class="conn">
+    <div class="modes" id="modes" role="tablist" aria-label="Which signer">
+      <button data-m="emu" class="on" role="tab">Emulator</button><button data-m="usb" role="tab">Cardputer (USB)</button>
+    </div>
     <span id="conn-pill" class="pill pill-off"><span class="dot"></span><span id="conn-text">Not connected</span></span>
-    <button id="connect" class="btn btn-primary">Connect over USB</button>
+    <button id="connect" class="btn btn-primary">Connect</button>
   </div>
 </header>
 
 <div id="no-serial" class="notice" hidden>
-  This browser can't talk to USB devices (it has no Web Serial). Open this page in Chrome or Edge on a
-  computer to send transactions and flash firmware. Everything else here works.
+  This browser can't talk to USB devices (it has no Web Serial). To use a Cardputer or flash one, open
+  this page in Chrome or Edge on a computer. The emulator works here.
 </div>
 
 <section class="hero">
   <div class="hero-text">
     <p class="eyebrow">How a transaction gets checked</p>
     <h1>The device works out the hash.<br><span>Not the computer.</span></h1>
-    <p class="lede">This page sends a demo Safe transaction to your Cardputer over USB. The Cardputer
-      rebuilds the transaction's hash from its fields, shows you what it does, and only compares the
-      hash this page claims. A wrong claim turns it red.</p>
+    <p class="lede" id="lede"></p>
   </div>
 
   <svg id="flow" class="flow" viewBox="0 0 1000 250" role="img" aria-label="This page, a USB cable, the Cardputer, a Grove cable through a regulator, and the ATECC608 chip">
@@ -64,7 +66,7 @@
     <!-- USB cable -->
     <path id="cable-usb" d="M226 186 C 290 186, 300 120, 372 120" class="cable"/>
     <path d="M226 186 C 290 186, 300 120, 372 120" class="cable-flow" id="flow-usb"/>
-    <text x="300" y="112" class="cable-label">USB</text>
+    <text x="300" y="112" class="cable-label" id="usb-label">USB</text>
     <!-- the Cardputer -->
     <g class="node node-card">
       <rect x="372" y="38" width="250" height="168" rx="16" fill="url(#g-body)" class="card-body"/>
@@ -73,16 +75,16 @@
       <g class="card-keys">
         <rect x="390" y="186" width="20" height="10" rx="2"/><rect x="414" y="186" width="20" height="10" rx="2"/><rect x="438" y="186" width="20" height="10" rx="2"/><rect x="462" y="186" width="20" height="10" rx="2"/><rect x="486" y="186" width="20" height="10" rx="2"/><rect x="510" y="186" width="20" height="10" rx="2"/><rect x="534" y="186" width="20" height="10" rx="2"/><rect x="558" y="186" width="20" height="10" rx="2"/><rect x="582" y="186" width="26" height="10" rx="2"/>
       </g>
-      <text x="497" y="226" class="node-label">Cardputer</text>
+      <text x="497" y="226" class="node-label" id="card-label">Cardputer</text>
       <text x="497" y="242" class="node-sub">works out its own, shows every page</text>
     </g>
     <!-- Grove cable and regulator -->
     <path d="M622 120 H 700" class="cable"/>
     <path d="M740 120 H 800" class="cable"/>
     <path d="M622 120 H 700 M740 120 H 800" class="cable-flow" id="flow-i2c"/>
-    <rect x="700" y="104" width="40" height="32" rx="5" class="reg"/>
-    <text x="720" y="124" class="reg-text">3.3V</text>
-    <text x="660" y="112" class="cable-label">Grove</text>
+    <g class="hw-only"><rect x="700" y="104" width="40" height="32" rx="5" class="reg"/>
+    <text x="720" y="124" class="reg-text">3.3V</text></g>
+    <text x="660" y="112" class="cable-label" id="grove-label">Grove</text>
     <!-- the chip -->
     <g class="node node-chip">
       <circle cx="880" cy="120" r="58" class="chip-halo" filter="url(#glow)"/>
@@ -92,9 +94,9 @@
         <rect x="846" y="102" width="6" height="3"/><rect x="846" y="110" width="6" height="3"/><rect x="846" y="118" width="6" height="3"/><rect x="846" y="126" width="6" height="3"/><rect x="846" y="134" width="6" height="3"/>
         <rect x="908" y="102" width="6" height="3"/><rect x="908" y="110" width="6" height="3"/><rect x="908" y="118" width="6" height="3"/><rect x="908" y="126" width="6" height="3"/><rect x="908" y="134" width="6" height="3"/>
       </g>
-      <text x="880" y="124" class="chip-text">608</text>
-      <text x="880" y="226" class="node-label">ATECC608</text>
-      <text x="880" y="242" class="node-sub">the key, made inside, never leaves</text>
+      <text x="880" y="124" class="chip-text" id="chip-text">608</text>
+      <text x="880" y="226" class="node-label" id="chip-label">ATECC608</text>
+      <text x="880" y="242" class="node-sub" id="chip-sub">the key, made inside, never leaves</text>
     </g>
   </svg>
 
@@ -102,7 +104,7 @@
     <li data-step="1"><span class="step-n">1</span><div><b>Fields over USB</b><small>This page sends the transaction as one line of text.</small></div></li>
     <li data-step="2"><span class="step-n">2</span><div><b>Hash on the device</b><small>The Cardputer rebuilds the EIP-712 hash and answers with it.</small></div></li>
     <li data-step="3"><span class="step-n">3</span><div><b>Every page reviewed</b><small>You page through it on the Cardputer. Del rejects.</small></div></li>
-    <li data-step="4" class="future"><span class="step-n">4</span><div><b>The chip signs</b><small>Milestone 3: the chip signs that hash, and nothing else.</small></div></li>
+    <li data-step="4"><span class="step-n">4</span><div><b id="step4-title">The key signs</b><small id="step4-sub"></small></div></li>
   </ol>
 
   <div class="device-strip" id="device-strip">
@@ -135,19 +137,25 @@
     <div class="two">
       <figure class="device">
         <div class="device-body">
-          <div class="device-bezel"><img id="d-screen" alt="The Cardputer's screen for this page" width="240" height="135"></div>
+          <div class="device-bezel"><img id="d-screen" alt="The Cardputer's screen for this page" width="240" height="135"><canvas id="emu-screen" width="240" height="135" hidden tabindex="0" aria-label="The emulator's screen: , and / page, Enter, Del"></canvas></div>
           <div class="device-keys" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
         </div>
-        <div class="pager">
+        <div class="emu-keys" id="emu-keys" hidden>
+          <button data-k="left" class="btn" aria-label="Previous page (,)">‹</button>
+          <button data-k="del" class="btn btn-danger">Del</button>
+          <button data-k="enter" class="btn btn-primary">Enter</button>
+          <button data-k="right" class="btn" aria-label="Next page (/)">›</button>
+        </div>
+        <div class="pager" id="pager">
           <button id="pg-prev" class="btn btn-ghost" aria-label="Previous page">‹</button>
           <div id="pg-dots" class="dots"></div>
           <button id="pg-next" class="btn btn-ghost" aria-label="Next page">›</button>
         </div>
-        <figcaption>Drawn on the laptop by the firmware's own code, pixel for pixel.</figcaption>
+        <figcaption id="d-caption"></figcaption>
       </figure>
 
       <div class="facts">
-        <h3>What the Cardputer says</h3>
+        <h3>What the signer says</h3>
         <ul id="d-items" class="items"></ul>
         <h3>The fields</h3>
         <dl id="d-fields" class="fields"></dl>
@@ -168,12 +176,12 @@
 
     <div class="send">
       <div class="send-head">
-        <h3>Send it to the Cardputer</h3>
+        <h3 id="send-title">Send it to the Cardputer</h3>
         <label class="switch"><input type="checkbox" id="tamper"><span class="switch-ui"></span><span>Claim a wrong hash</span></label>
       </div>
       <pre class="line" id="d-line"></pre>
       <div class="send-actions">
-        <button id="send" class="btn btn-primary btn-big" disabled>Send to Cardputer</button>
+        <button id="send" class="btn btn-primary btn-big" disabled>Send</button>
         <span id="send-status" class="send-status" aria-live="polite">Connect the Cardputer to send.</span>
       </div>
 
@@ -185,13 +193,15 @@
         </div>
         <div class="verdict" id="c-verdict"><span class="verdict-icon">?</span><span class="verdict-text">waiting</span></div>
         <div class="side side-empty" id="c-device">
-          <span class="side-k">The Cardputer worked out</span>
+          <span class="side-k" id="c-device-k">The Cardputer worked out</span>
           <div class="side-hash"><span class="side-blockie"></span><span class="code">— — — —</span></div>
           <code class="side-full">send it to find out</code>
         </div>
       </div>
 
-      <div class="sig">
+      <div class="pk" id="pk" hidden></div>
+
+      <div class="sig" id="sig">
         <div class="sig-icon" aria-hidden="true">✎</div>
         <div><b>Signature: milestone 3</b><p>The firmware doesn't sign yet. When it does, the chip's signature over
           the hash the Cardputer worked out comes back here, and this page checks it against the chip's public key.</p></div>
@@ -226,7 +236,7 @@
 </section>
 
 <footer class="foot">
-  <span>Cardputer signer · an experiment, testnet only, not audited · started from Austin Griffith's picowallet</span>
+  <span>diykey · an experiment, testnet only, not audited · started from Austin Griffith's picowallet · <a href="https://github.com/jmcpheron/diykey">source</a></span>
   <span class="muted">This page loads nothing from anywhere else.</span>
 </footer>
 </body>

@@ -57,6 +57,30 @@ The firmware, the wiring and these notes moved into their own repository. The fi
 code as on the bench; only comments and the vectors' descriptions changed. On the laptop, `cargo
 test` passed (15 tests) and the firmware built at 160 KB. It wasn't flashed again.
 
+## 2026-10-13: a web page that talks to the Cardputer
+
+`web/` sends the demo transactions to the Cardputer over USB (Web Serial) and can flash it
+(esptool-js). On the board: `ping` came back `= pong cardputer-signer m2`, and
+`eth-send-base-sepolia` came back with the vector's own safeTxHash, `…085c2b6d`, the same one the
+page works out. Opening the port didn't reset the board. Then the page itself, connected and sending,
+checked by hand. Flashing from the page wasn't tried.
+
+## 2026-10-13: diykey, an emulator and passkeys
+
+The repository is now diykey, for diykey.app. `core` compiles to WebAssembly (`wasm/`, 125 KB) and
+runs as an emulator in the page, with the firmware's states and the same reply lines. Its key is a
+passkey: Enter on the hash page asks it to sign the hash the emulator worked out, in the WebAuthn
+format Safe's passkey signer checks ([PASSKEY.md](PASSKEY.md)), and the page verifies the signature.
+
+Checked: `node web/test.mjs` (the emulator's hash for all 17 vectors, its signing rules, the passkey
+parsing and verification with Node as the authenticator), and `node web/e2e.mjs` in Chrome with a
+virtual authenticator: a passkey made, a transaction signed and verified, a wrong claim not signed.
+Not checked yet: a real phone's passkey, and the Safe encoding against the contract onchain.
+
+core gained a passkey key state, a Sign footer and a Signed screen, which the firmware doesn't use.
+All 27 of the firmware's screens came out the same, byte for byte. The firmware image's hash
+changed (`06ec4ab9…`), from code layout; the board didn't need flashing.
+
 ## Next
 
 - Milestone 3: hold to sign with the chip, over the hash the device worked out.

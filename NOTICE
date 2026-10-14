@@ -1,0 +1,30 @@
+Cardputer signer
+Copyright (c) 2026 Jason McPheron. MIT (LICENSE).
+
+WHERE IT COMES FROM
+
+picowallet, by Austin Griffith (https://github.com/austintgriffith/picowallet), MIT,
+Copyright (c) 2026 Austin Griffith.
+  picowallet showed that a Raspberry Pi Pico can drive an ATECC608 from MicroPython, rebuild an
+  EIP-712 digest on the device, show it, and sign with a key that never leaves the chip. This
+  signer was ported from a MicroPython one built on picowallet's code. These parts go back to
+  files that started in picowallet:
+    core/src/atecc.rs           from atecc.py: the ATECC608's packets and wake sequence
+    core/src/blockies.rs        from blockies.py
+    firmware/src/bin/main.rs    the screen's start-up sequence, from lcd.py
+  They are under the MIT license in LICENSE, which carries Austin Griffith's copyright.
+
+OTHER WORK THIS USES
+
+Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono (Braille Institute of America,
+  https://github.com/googlefonts/atkinson-hyperlegible-next), SIL Open Font License 1.1: the
+  glyphs in fonts/qf_*.bin are rendered from them. The license is in fonts/OFL.txt.
+
+Blockies (https://github.com/ethereum/blockies): core/src/blockies.rs draws the same identicons,
+  ported from its algorithm.
+
+Rust crates, each under its own license (MIT or Apache-2.0 for the ones named here): esp-hal,
+  esp-bootloader-esp-idf, esp-backtrace, esp-println and their dependencies in the firmware;
+  sha3 in core. Cargo.lock in core/ and firmware/ lists every one.
+
+The test vectors in vectors/ are described in vectors/SOURCE.md.

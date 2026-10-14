@@ -1,0 +1,7 @@
+target/
+**/.DS_Store
+.vscode/
+backups/
+*.bin.bak
+.env
+secrets*

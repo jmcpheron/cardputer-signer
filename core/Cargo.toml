@@ -1,0 +1,12 @@
+[package]
+name = "signer-core"
+version = "0.1.0"
+edition = "2021"
+description = "Everything the signer does that isn't hardware: the Safe hash, the chip's packets, the screens. Runs on the laptop for tests and previews."
+publish = false
+
+[dependencies]
+sha3 = { version = "=0.10.8", default-features = false }
+
+[dev-dependencies]
+serde_json = "=1.0.154"

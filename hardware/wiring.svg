@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="470" viewBox="0 0 900 470" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#1f2328">
+  <title>Cardputer signer wiring: the Grove port, an AMS1117-3.3 module and an ATECC608 breakout</title>
+  <rect width="900" height="470" rx="12" fill="#ffffff"/>
+
+  <text x="30" y="40" font-size="20" font-weight="700">Wiring: the key on the Grove port</text>
+  <text x="30" y="64" fill="#59636e">Grove 5 V goes through a 3.3 V regulator to the chip. SDA and SCL go straight to G2 and G1.</text>
+  <text x="30" y="84" fill="#59636e">Pins are drawn by name, not in the order they sit in the connector.</text>
+
+  <!-- Cardputer -->
+  <rect x="30" y="110" width="240" height="250" rx="14" fill="#f6f8fa" stroke="#8c959f" stroke-width="2"/>
+  <text x="46" y="138" font-weight="700">M5Stack Cardputer v1.1</text>
+  <text x="46" y="158" fill="#59636e" font-size="13">ESP32-S3 (Stamp-S3A)</text>
+  <rect x="46" y="172" width="120" height="68" rx="4" fill="#24292f"/>
+  <text x="106" y="211" fill="#8c959f" font-size="12" text-anchor="middle">240 × 135</text>
+  <g fill="#d0d7de">
+    <rect x="46" y="256" width="14" height="12" rx="2"/><rect x="64" y="256" width="14" height="12" rx="2"/><rect x="82" y="256" width="14" height="12" rx="2"/><rect x="100" y="256" width="14" height="12" rx="2"/><rect x="118" y="256" width="14" height="12" rx="2"/><rect x="136" y="256" width="14" height="12" rx="2"/><rect x="154" y="256" width="14" height="12" rx="2"/>
+    <rect x="46" y="274" width="14" height="12" rx="2"/><rect x="64" y="274" width="14" height="12" rx="2"/><rect x="82" y="274" width="14" height="12" rx="2"/><rect x="100" y="274" width="14" height="12" rx="2"/><rect x="118" y="274" width="14" height="12" rx="2"/><rect x="136" y="274" width="14" height="12" rx="2"/><rect x="154" y="274" width="14" height="12" rx="2"/>
+    <rect x="46" y="292" width="14" height="12" rx="2"/><rect x="64" y="292" width="14" height="12" rx="2"/><rect x="82" y="292" width="14" height="12" rx="2"/><rect x="100" y="292" width="14" height="12" rx="2"/><rect x="118" y="292" width="14" height="12" rx="2"/><rect x="136" y="292" width="14" height="12" rx="2"/><rect x="154" y="292" width="14" height="12" rx="2"/>
+  </g>
+  <text x="46" y="340" fill="#59636e" font-size="12">keyboard</text>
+  <!-- Grove port -->
+  <rect x="198" y="150" width="72" height="182" rx="6" fill="#ffffff" stroke="#8c959f" stroke-width="1.5"/>
+  <text x="234" y="349" font-size="12" font-weight="700" text-anchor="middle" fill="#59636e">Grove port</text>
+  <text x="262" y="175" text-anchor="end">5V</text>
+  <text x="262" y="215" text-anchor="end">GND</text>
+  <text x="262" y="295" text-anchor="end">G2</text>
+  <text x="262" y="325" text-anchor="end">G1</text>
+
+  <!-- AMS1117 module -->
+  <rect x="380" y="132" width="160" height="104" rx="8" fill="#e8f1fb" stroke="#0969da" stroke-width="2"/>
+  <text x="460" y="155" font-weight="700" text-anchor="middle">AMS1117-3.3</text>
+  <text x="460" y="197" fill="#59636e" font-size="12" text-anchor="middle">3.3 V regulator</text>
+  <text x="388" y="175">IN</text>
+  <text x="388" y="215">GND</text>
+  <text x="532" y="175" text-anchor="end">OUT</text>
+
+  <!-- ATECC608 breakout -->
+  <rect x="660" y="132" width="210" height="218" rx="8" fill="#eef8f0" stroke="#1a7f37" stroke-width="2"/>
+  <text x="765" y="250" font-weight="700" text-anchor="middle">ATECC608</text>
+  <text x="765" y="268" fill="#59636e" font-size="12" text-anchor="middle">breakout, I2C 0x60</text>
+  <text x="668" y="175">VIN</text>
+  <text x="668" y="215">GND</text>
+  <text x="668" y="295">SDA</text>
+  <text x="668" y="325">SCL</text>
+
+  <!-- wires -->
+  <g fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M270 170 H380" stroke="#cf222e"/>
+    <path d="M270 210 H380" stroke="#24292f"/>
+    <path d="M330 210 V255 H605 V210 H660" stroke="#24292f"/>
+    <path d="M540 170 H660" stroke="#e16f24"/>
+    <path d="M270 290 H660" stroke="#d4a72c"/>
+    <path d="M270 320 H660" stroke="#8c959f" stroke-width="7"/>
+    <path d="M270 320 H660" stroke="#ffffff" stroke-width="3"/>
+  </g>
+  <circle cx="330" cy="210" r="5" fill="#24292f"/>
+  <g font-size="12" font-weight="700">
+    <text x="325" y="163" text-anchor="middle" fill="#cf222e">5 V</text>
+    <text x="600" y="163" text-anchor="middle" fill="#bc4c00">3.3 V</text>
+    <text x="465" y="249" text-anchor="middle" fill="#24292f">GND</text>
+    <text x="465" y="283" text-anchor="middle" fill="#9a6700">SDA</text>
+    <text x="465" y="313" text-anchor="middle" fill="#59636e">SCL</text>
+  </g>
+
+  <!-- notes -->
+  <g font-size="13" fill="#59636e">
+    <text x="30" y="398">• G1 and G2 are 3.3 V pins. Don't pull SDA or SCL up to 5 V: the breakout's pull-ups go to its VIN, here 3.3 V.</text>
+    <text x="30" y="420">• Swapped SDA and SCL do no harm; the chip just won't answer. Check 5 V and GND with a meter before connecting the chip.</text>
+    <text x="30" y="442">• The HiLetgo module is sold as a "buck"; it is an AMS1117 linear regulator. From 5 V that is fine.</text>
+  </g>
+</svg>

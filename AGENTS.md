@@ -24,6 +24,7 @@ crate, a network path or a new way to sign without asking.
 
 ```sh
 (cd core && cargo test --locked)
+node web/test.mjs
 (cd firmware && . ~/export-esp.sh && cargo build --release --locked)
 ```
 

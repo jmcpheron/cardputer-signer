@@ -98,6 +98,24 @@ refundreceiver=] [expect=0x…]`. The device answers `= hash 0x…` with the has
 
 On the device: Enter or `/` for the next page, `,` for the one before, Del to reject.
 
+### Or use the web page
+
+`web/` is a page that sends the demo transactions to the Cardputer over USB, shows the hash it works
+out next to the one the page claims, draws every page the device will show, and can flash the
+firmware. It runs in Chrome or Edge (Web Serial), from your own computer:
+
+```sh
+./web/build.sh                              # the screen images and the firmware image
+python3 -m http.server 8642 --bind 127.0.0.1
+# then open http://127.0.0.1:8642/web/
+```
+
+It loads nothing from anywhere else (its Content-Security-Policy says so). The browser works out the
+Safe hash itself (`web/lib/safe.js`) and claims it. The Cardputer works out its own and only
+compares. `node web/test.mjs` checks the page's hash and blockies against the vectors. Flashing uses
+Espressif's esptool-js, pinned in `web/vendor/esptool-js/` with its checksums. The image's SHA-256 is
+checked before writing.
+
 ## What was checked
 
 - `core`: the Safe hash against all 17 vectors in `vectors/safe_tx.json` (domain separator and
@@ -119,6 +137,7 @@ Where the vectors come from: [vectors/SOURCE.md](vectors/SOURCE.md).
 | `core/` | everything that isn't hardware, `no_std` and no heap: the Safe hash, the ATECC608's packets (read commands only), blockies, the fonts, a framebuffer and the screens. It runs on the laptop. |
 | `firmware/` | the Cardputer: the panel (SPI), the chip (I2C), the keyboard, lines over USB. It draws with `core`. |
 | `host/send.py` | sends a transaction from the computer and prints what the device says |
+| `web/` | a page that sends the demo transactions over USB and flashes the firmware (Chrome or Edge) |
 | `vectors/` | test vectors from outside this code |
 | `fonts/` | Atkinson Hyperlegible Next and Mono as 4-bit bitmaps (SIL OFL 1.1, `fonts/OFL.txt`) |
 | `hardware/` | the parts, the wiring diagram, and later a case |

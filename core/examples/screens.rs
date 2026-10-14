@@ -1,5 +1,6 @@
 //! Draws the screens on the laptop, exactly as the device draws them, to PNG at 3x:
 //!   cargo run --example screens [outdir]      (default target/screens)
+//!   cargo run --example screens outdir all  (every page of every vector, for web/)
 //! The transactions are the test vectors (`vectors/safe_tx.json`), sent through the same
 //! line protocol the device reads.
 use serde_json::Value;
@@ -31,13 +32,33 @@ fn main() {
     let vectors: Value = serde_json::from_str(&std::fs::read_to_string(
         format!("{}/../vectors/safe_tx.json", env!("CARGO_MANIFEST_DIR"))).unwrap()).unwrap();
     let find = |n: &str| vectors["vectors"].as_array().unwrap().iter().find(|v| v["name"] == n).unwrap().clone();
-    for (name, tamper) in [("eth-send-base-sepolia", false), ("erc20-transfer", false), ("unlimited-approve", false),
-                           ("gas-refund", false), ("delegatecall-unknown", false), ("big-nonce", false), ("add-owner", false), ("eth-send-base-sepolia", true)] {
+    let picks: Vec<(String, bool)> = if std::env::args().nth(2).as_deref() == Some("all") {
+        // `all`, for web/: every page of every vector, and each one's hash page with a wrong claim
+        vectors["vectors"].as_array().unwrap().iter()
+            .flat_map(|v| [false, true].map(|t| (v["name"].as_str().unwrap().to_string(), t)))
+            .collect()
+    } else {
+        [("eth-send-base-sepolia", false), ("erc20-transfer", false), ("unlimited-approve", false), ("gas-refund", false),
+         ("delegatecall-unknown", false), ("big-nonce", false), ("add-owner", false), ("eth-send-base-sepolia", true)]
+            .map(|(n, t)| (n.to_string(), t)).to_vec()
+    };
+    let mut reviews = serde_json::Map::new();
+    for (name, tamper) in &picks {
+        let (name, tamper) = (name.as_str(), *tamper);
         let line = tx_line(&find(name), tamper);
         let mut data = [0u8; 2048];
         let Ok(Cmd::Tx(t)) = proto::parse(&line, &mut data) else { panic!("{name}: {line}") };
         let p = Pending::new(t, &data).unwrap();
         let tag = if tamper { format!("{name}-tampered") } else { name.to_string() };
+        if !tamper {
+            // what the device says about it, for web/ (reviews.json)
+            let level = |l: signer_core::decode::Level| format!("{l:?}").to_lowercase();
+            let items: Vec<Value> = p.review.items.iter().flatten()
+                .map(|i| serde_json::json!([i.title.as_str(), level(i.level)])).collect();
+            reviews.insert(name.into(), serde_json::json!({
+                "summary": p.review.summary(), "level": level(p.review.level), "items": items, "pages": p.pages(),
+            }));
+        }
         for page in 0..p.pages() {
             if tamper && page + 1 < p.pages() {
                 continue;
@@ -47,6 +68,11 @@ fn main() {
         if name == "eth-send-base-sepolia" && !tamper {
             save("rejected", &|f| screens::rejected(f, &p));
         }
+    }
+    if picks.len() > 8 {
+        let path = format!("{out}/reviews.json");
+        std::fs::write(&path, serde_json::to_string_pretty(&reviews).unwrap()).unwrap();
+        println!("{path}");
     }
 }
 

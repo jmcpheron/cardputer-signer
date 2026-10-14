@@ -27,4 +27,7 @@ Rust crates, each under its own license (MIT or Apache-2.0 for the ones named he
   esp-bootloader-esp-idf, esp-backtrace, esp-println and their dependencies in the firmware;
   sha3 in core. Cargo.lock in core/ and firmware/ lists every one.
 
+esptool-js 0.7.0 (Espressif, https://github.com/espressif/esptool-js), Apache-2.0: the flasher
+  web/ loads, unchanged, in web/vendor/esptool-js/ with its license and checksums (SOURCE.md).
+
 The test vectors in vectors/ are described in vectors/SOURCE.md.

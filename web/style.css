@@ -163,8 +163,16 @@ a { color: var(--accent); }
 .stage-mini { display: none; }
 .stage-hint { margin: 10px 0 0; text-align: center; color: var(--faint); font-size: 13px; }
 .stage-hint kbd { font: 600 12px var(--mono); padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
-.emu-keys { display: none; grid-template-columns: 1fr 1.3fr 1.3fr 1fr; gap: 8px; margin-top: 12px; }
-.emu-keys .btn { padding: 12px 0; font-size: 16px; touch-action: manipulation; }
+/* on a phone, the signer's four keys on the Cardputer, in place of its keyboard */
+.emu-keys { display: none; grid-template-columns: 1fr 1.3fr 1.3fr 1fr; gap: 8px; }
+.key { font: 650 16px system-ui, sans-serif; height: 46px; border: 0; border-radius: 12px; color: #fff; cursor: pointer; touch-action: manipulation;
+  background: linear-gradient(180deg, #4a4e55, var(--cp-key)); box-shadow: 0 3px 0 #1d1f22, inset 0 1px 0 rgb(255 255 255 / .12); transition: transform .06s, box-shadow .06s; }
+.key:active { transform: translateY(2px); box-shadow: 0 1px 0 #1d1f22; }
+.key-del { background: linear-gradient(180deg, rgb(232 74 62), var(--bad-bar)); box-shadow: 0 3px 0 rgb(120 22 22), inset 0 1px 0 rgb(255 255 255 / .2); }
+.key-del:active { box-shadow: 0 1px 0 rgb(120 22 22); }
+.key-ok { background: linear-gradient(180deg, rgb(138 160 255), rgb(98 122 240)); color: #0b0d14; box-shadow: 0 3px 0 rgb(50 64 150), inset 0 1px 0 rgb(255 255 255 / .3); }
+.key-ok:active { box-shadow: 0 1px 0 rgb(50 64 150); }
+.key:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* the bench: the stage on the left, this computer on the right, the USB cable between */
 .hero > * { min-width: 0; }
@@ -436,10 +444,50 @@ a { color: var(--accent); }
   .pc-body { padding: 12px; }
   .hero { padding-top: 20px; }
   .modes button { padding: 8px 10px; font-size: 13px; }
-  .emu-keys { display: grid; }
-  .steps { grid-template-columns: 1fr 1fr; }
   .device-strip { grid-template-columns: 1fr 1fr; }
   .tile-chip { grid-column: span 2; }
   .notice { margin: 12px 16px 0; }
+
+  /* the run from the top down, in the order it happens: the key, this computer sends the fields,
+     the Cardputer shows them, the steps so far, then the two hashes side by side */
+  .hero { display: flex; flex-direction: column; gap: 14px; }
+  .bench, .bench-left { display: contents; }
+  .keypanel { order: 1; align-self: stretch; }
+  .pc { order: 2; }
+  .stage { order: 3; padding: 40px 8px 8px; scroll-margin-top: 72px; }
+  .stage-mini { left: 8px; right: 8px; gap: 4px; }
+  .stage-mini span { padding: 3px 7px; }
+  .stage-mini i { letter-spacing: .02em; }
+  .bench .steps { order: 4; }
+  .result { order: 5; margin-top: 0; }
+  .stage-hint { order: 6; margin: 0; }
+  /* the USB cable, from this computer down to the Cardputer */
+  .pc::after { content: ""; position: absolute; left: 50%; bottom: -15px; width: 8px; height: 15px; margin-left: -4px; background: linear-gradient(90deg, #c9ccd2, #f4f5f7, #c9ccd2); }
+  .bench.p-tx .pc::after { background: var(--accent); }
+  .bench.p-rx .pc::after { background: var(--ok); }
+
+  /* the Cardputer close up: its screen across the page, its four keys under it */
+  .cp { aspect-ratio: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px; border-radius: 14px; }
+  .cp-label, .cp-g0, .cp-m5, .cp-stamp, .cp-keys { display: none; }
+  .cp-screen { position: relative; left: auto; top: auto; width: calc(100% - 2cqw); }
+  .emu-keys { display: grid; }
+
+  /* the steps as a line of four, with what the current one means under it */
+  .bench .steps { position: relative; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 0; }
+  .bench .steps:has(li.active) { padding-bottom: 44px; }
+  .bench .steps::before { content: ""; position: absolute; left: 12.5%; right: 12.5%; top: 13px; height: 2px; background: var(--line); }
+  .bench .steps li { flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 0 2px; border: 0; background: none; }
+  .steps .step-n { position: relative; }
+  .steps b { display: block; font-size: 12px; font-weight: 650; line-height: 1.25; }
+  .steps small { display: none; }
+  .steps li.active small { display: block; position: absolute; left: 4px; right: 4px; bottom: 0; font-size: 13px; }
+
+  /* the two hashes one above the other, their last eight characters lined up to read across */
+  .result .compare { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .result .side { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; }
+  .result .side-full { display: none; }
+  .result .side-hash .code { font-size: 20px; }
+  .verdict { flex-direction: row; gap: 8px; }
+  .verdict-icon { width: 30px; height: 30px; font-size: 18px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

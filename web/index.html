@@ -79,6 +79,13 @@
         <text x="8" y="76" class="st-t">USB · 8MB</text>
       </svg>
       <div class="cp-keys" id="cp-keys" aria-label="The Cardputer's keyboard: ; . , / page, ok and del"></div>
+      <!-- on a phone, the signer's four keys in place of the keyboard -->
+      <div class="emu-keys" id="emu-keys">
+        <button data-k="left" class="key" aria-label="Previous page (,)">‹</button>
+        <button data-k="del" class="key key-del">Del</button>
+        <button data-k="enter" class="key key-ok">Enter</button>
+        <button data-k="right" class="key" aria-label="Next page (/)">›</button>
+      </div>
     </div>
 
         <div class="stage-mini" aria-hidden="true">
@@ -86,12 +93,6 @@
         </div>
       </div>
       <p class="stage-hint" id="stage-hint"></p>
-      <div class="emu-keys" id="emu-keys">
-        <button data-k="left" class="btn" aria-label="Previous page (,)">‹</button>
-        <button data-k="del" class="btn btn-danger">Del</button>
-        <button data-k="enter" class="btn btn-primary">Enter</button>
-        <button data-k="right" class="btn" aria-label="Next page (/)">›</button>
-      </div>
       <ol class="steps" id="steps">
         <li data-step="1"><span class="step-n">1</span><div><b>Fields over USB</b><small>This computer sends the transaction as one line of text.</small></div></li>
         <li data-step="2"><span class="step-n">2</span><div><b>Hash on the device</b><small>The signer rebuilds the EIP-712 hash and answers with it.</small></div></li>

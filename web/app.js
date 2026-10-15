@@ -844,8 +844,11 @@ async function sendTx() {
   resetSend();
   steps({ 1: "active" });
   status("Sending the fields…");
-  if (emuMode()) $("emu-screen").focus(); // so Enter and the page keys go to the emulator
+  const phone = matchMedia("(max-width: 760px)").matches;
+  if (emuMode()) $("emu-screen").focus({ preventScroll: phone }); // so Enter and the page keys go to the emulator
   await send(txLine(fields(v), p.claimed));
+  // on a phone this computer sits above the Cardputer: bring it up, once the lines above it have grown
+  if (phone) $("stage").scrollIntoView({ block: "start" });
   if (p.done || p.device) return; // the answer came back before the write finished
   steps({ 1: "done", 2: "active" });
   status(`Waiting for ${signerName()}'s hash…`);

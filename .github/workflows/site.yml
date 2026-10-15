@@ -76,7 +76,7 @@ jobs:
       - name: Assemble the site
         run: |
           mkdir -p _site/vectors
-          cp -r web/index.html web/app.js web/style.css web/lib web/vendor web/screens web/emu web/firmware _site/
+          cp -r web/index.html web/app.js web/style.css web/ceremony.html web/ceremony.css web/lib web/vendor web/screens web/emu web/firmware _site/
           cp vectors/safe_tx.json _site/vectors/
           echo diykey.app > _site/CNAME
           (cd _site && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)

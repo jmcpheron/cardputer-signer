@@ -51,9 +51,11 @@ The details, with dates: [docs/BUILDLOG.md](docs/BUILDLOG.md).
 
 ## Build one
 
-You need a Cardputer v1.1, an ATECC608 breakout, an AMS1117-3.3 regulator module and a Grove cable.
+You need a Cardputer v1.1 (not the newer Cardputer-Adv, whose keyboard is wired differently), an
+ATECC608 breakout, an AMS1117-3.3 regulator module and a Grove cable.
 The Grove port gives 5 V, and the ESP32-S3's pins take 3.3 V at most, so the chip runs from the
-regulator's 3.3 V. Parts, wiring and checks: [hardware/](hardware/README.md).
+regulator's 3.3 V. Parts, a shopping list, wiring and checks: [hardware/](hardware/README.md). How
+the chip will get its key: [the key ceremony](docs/CEREMONY.md), a plan.
 
 ![Wiring: Grove 5 V through an AMS1117-3.3 to the ATECC608's VIN; G2 to SDA, G1 to SCL](hardware/wiring.svg)
 
@@ -153,12 +155,12 @@ Where the vectors come from: [vectors/SOURCE.md](vectors/SOURCE.md).
 | `core/` | everything that isn't hardware, `no_std` and no heap: the Safe hash, the ATECC608's packets (read commands only), blockies, the fonts, a framebuffer and the screens. It runs on the laptop. |
 | `firmware/` | the Cardputer: the panel (SPI), the chip (I2C), the keyboard, lines over USB. It draws with `core`. |
 | `host/send.py` | sends a transaction from the computer and prints what the device says |
-| `web/` | the page at diykey.app: the emulator, the Cardputer over USB, and flashing |
+| `web/` | the page at diykey.app: the emulator, the Cardputer over USB, and flashing; and the key ceremony's page |
 | `wasm/` | the emulator: `core` in WebAssembly, the firmware's states, a passkey as its key |
 | `vectors/` | test vectors from outside this code |
 | `fonts/` | Atkinson Hyperlegible Next and Mono as 4-bit bitmaps (SIL OFL 1.1, `fonts/OFL.txt`) |
 | `hardware/` | the parts, the wiring diagram, and later a case |
-| `docs/` | the build log, and the screen previews above |
+| `docs/` | the build log, the key ceremony, and the screen previews above |
 
 ## Where it comes from
 

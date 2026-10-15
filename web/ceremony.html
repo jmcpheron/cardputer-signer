@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>diykey: the key ceremony</title>
+<meta name="description" content="How a fresh ATECC608 becomes a diykey key: its rules locked, then a key made inside the chip that nobody chose and nobody can read out.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="ceremony.css">
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="./">
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="3" y="5" width="26" height="22" rx="5" class="mark-body"/>
+      <rect x="7" y="9" width="18" height="9" rx="1.5" class="mark-screen"/>
+      <path d="M11 13.5l3 3 6-6" class="mark-check"/>
+      <g class="mark-keys"><rect x="7" y="21" width="3" height="2" rx=".6"/><rect x="11.5" y="21" width="3" height="2" rx=".6"/><rect x="16" y="21" width="3" height="2" rx=".6"/><rect x="20.5" y="21" width="4.5" height="2" rx=".6"/></g>
+    </svg>
+    <div>
+      <div class="brand-name">diykey</div>
+      <div class="brand-sub">A Safe signer you build, or try with a passkey</div>
+    </div>
+  </a>
+  <nav class="top-links cer-links"><a href="./">Try it</a><a href="#part1">The steps</a><a href="#brand">Branded keys</a><a href="https://github.com/jmcpheron/diykey">Source</a></nav>
+</header>
+
+<main class="cer">
+
+<section class="cer-hero">
+  <p class="eyebrow">The key ceremony</p>
+  <h1>A key nobody chose, <span>made inside the chip.</span></h1>
+  <p class="lede">How a fresh ATECC608 becomes a diykey key. Its rules are written and locked. Then the chip
+    makes a key that can't be read out, and the key is sealed. Two parts and ten steps, three of them
+    permanent, all on the Cardputer's own screen and keys.</p>
+  <p class="plan-note"><b>A plan. No firmware runs it yet.</b> The screens on this page are mockups, drawn by
+    the signer's own drawing code and fonts the way the Cardputer would draw them
+    (<code>core/examples/ceremony.rs</code>). The steps themselves ran on silicon, from the MicroPython
+    signer this one was ported from, on two ATECC608A chips (<a href="#silicon">what ran</a>).</p>
+
+  <ol class="life" aria-label="The chip through the ceremony">
+    <li><svg class="chip st-factory" viewBox="0 0 132 150" role="img" aria-label="A factory chip: nothing locked, every slot unknown"><rect class="pin" x="3" y="26" width="10" height="6" rx="1"/><rect class="pin" x="119" y="26" width="10" height="6" rx="1"/><rect class="pin" x="3" y="45" width="10" height="6" rx="1"/><rect class="pin" x="119" y="45" width="10" height="6" rx="1"/><rect class="pin" x="3" y="64" width="10" height="6" rx="1"/><rect class="pin" x="119" y="64" width="10" height="6" rx="1"/><rect class="pin" x="3" y="83" width="10" height="6" rx="1"/><rect class="pin" x="119" y="83" width="10" height="6" rx="1"/><rect class="pin" x="3" y="102" width="10" height="6" rx="1"/><rect class="pin" x="119" y="102" width="10" height="6" rx="1"/><rect class="pin" x="3" y="121" width="10" height="6" rx="1"/><rect class="pin" x="119" y="121" width="10" height="6" rx="1"/><rect class="pkg" x="12" y="8" width="108" height="136" rx="10"/><text class="pkg-t" x="66" y="23">ATECC608</text><rect class="z cfg" x="22" y="31" width="88" height="18" rx="4"/><text class="z-t" x="28" y="44">rules</text><g class="lock cfg-lock"><path class="sh sh-open" d="M96.5 37.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 41.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="41" width="10" height="7" rx="1.5"/></g><rect class="t s0" x="22" y="56" width="19" height="13" rx="2"/><rect class="t d" x="45" y="56" width="19" height="13" rx="2"/><rect class="t d" x="68" y="56" width="19" height="13" rx="2"/><rect class="t d" x="91" y="56" width="19" height="13" rx="2"/><rect class="t d" x="22" y="73" width="19" height="13" rx="2"/><rect class="t d" x="45" y="73" width="19" height="13" rx="2"/><rect class="t d" x="68" y="73" width="19" height="13" rx="2"/><rect class="t d" x="91" y="73" width="19" height="13" rx="2"/><rect class="t s8" x="22" y="90" width="19" height="13" rx="2"/><rect class="t d" x="45" y="90" width="19" height="13" rx="2"/><rect class="t d" x="68" y="90" width="19" height="13" rx="2"/><rect class="t d" x="91" y="90" width="19" height="13" rx="2"/><rect class="t d" x="22" y="107" width="19" height="13" rx="2"/><rect class="t d" x="45" y="107" width="19" height="13" rx="2"/><rect class="t d" x="68" y="107" width="19" height="13" rx="2"/><rect class="t d" x="91" y="107" width="19" height="13" rx="2"/><text class="t-n n0" x="31.5" y="66">0</text><text class="t-n n8" x="31.5" y="100">8</text><rect class="z otp" x="22" y="126" width="66" height="12" rx="3"/><text class="z-t otp-t" x="28" y="135">OTP</text><text class="z-t rec" x="56" y="135">DK</text><g class="lock data-lock"><path class="sh sh-open" d="M96.5 128.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 132.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="132" width="10" height="7" rx="1.5"/></g></svg><b>Factory</b><small>Nothing locked. Its rules are Microchip's.</small></li>
+    <li class="perm"><svg class="chip st-rules" viewBox="0 0 132 150" role="img" aria-label="Rules locked: the config is set, the slots still empty"><rect class="pin" x="3" y="26" width="10" height="6" rx="1"/><rect class="pin" x="119" y="26" width="10" height="6" rx="1"/><rect class="pin" x="3" y="45" width="10" height="6" rx="1"/><rect class="pin" x="119" y="45" width="10" height="6" rx="1"/><rect class="pin" x="3" y="64" width="10" height="6" rx="1"/><rect class="pin" x="119" y="64" width="10" height="6" rx="1"/><rect class="pin" x="3" y="83" width="10" height="6" rx="1"/><rect class="pin" x="119" y="83" width="10" height="6" rx="1"/><rect class="pin" x="3" y="102" width="10" height="6" rx="1"/><rect class="pin" x="119" y="102" width="10" height="6" rx="1"/><rect class="pin" x="3" y="121" width="10" height="6" rx="1"/><rect class="pin" x="119" y="121" width="10" height="6" rx="1"/><rect class="pkg" x="12" y="8" width="108" height="136" rx="10"/><text class="pkg-t" x="66" y="23">ATECC608</text><rect class="z cfg" x="22" y="31" width="88" height="18" rx="4"/><text class="z-t" x="28" y="44">rules</text><g class="lock cfg-lock"><path class="sh sh-open" d="M96.5 37.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 41.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="41" width="10" height="7" rx="1.5"/></g><rect class="t s0" x="22" y="56" width="19" height="13" rx="2"/><rect class="t d" x="45" y="56" width="19" height="13" rx="2"/><rect class="t d" x="68" y="56" width="19" height="13" rx="2"/><rect class="t d" x="91" y="56" width="19" height="13" rx="2"/><rect class="t d" x="22" y="73" width="19" height="13" rx="2"/><rect class="t d" x="45" y="73" width="19" height="13" rx="2"/><rect class="t d" x="68" y="73" width="19" height="13" rx="2"/><rect class="t d" x="91" y="73" width="19" height="13" rx="2"/><rect class="t s8" x="22" y="90" width="19" height="13" rx="2"/><rect class="t d" x="45" y="90" width="19" height="13" rx="2"/><rect class="t d" x="68" y="90" width="19" height="13" rx="2"/><rect class="t d" x="91" y="90" width="19" height="13" rx="2"/><rect class="t d" x="22" y="107" width="19" height="13" rx="2"/><rect class="t d" x="45" y="107" width="19" height="13" rx="2"/><rect class="t d" x="68" y="107" width="19" height="13" rx="2"/><rect class="t d" x="91" y="107" width="19" height="13" rx="2"/><text class="t-n n0" x="31.5" y="66">0</text><text class="t-n n8" x="31.5" y="100">8</text><rect class="z otp" x="22" y="126" width="66" height="12" rx="3"/><text class="z-t otp-t" x="28" y="135">OTP</text><text class="z-t rec" x="56" y="135">DK</text><g class="lock data-lock"><path class="sh sh-open" d="M96.5 128.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 132.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="132" width="10" height="7" rx="1.5"/></g></svg><b><span class="tag red">P3</span>Rules locked</b><small>The table, checked by CRC.</small></li>
+    <li class="perm"><svg class="chip st-data" viewBox="0 0 132 150" role="img" aria-label="Data locked: unused slots zero, the record in OTP, slot 0 empty and waiting"><rect class="pin" x="3" y="26" width="10" height="6" rx="1"/><rect class="pin" x="119" y="26" width="10" height="6" rx="1"/><rect class="pin" x="3" y="45" width="10" height="6" rx="1"/><rect class="pin" x="119" y="45" width="10" height="6" rx="1"/><rect class="pin" x="3" y="64" width="10" height="6" rx="1"/><rect class="pin" x="119" y="64" width="10" height="6" rx="1"/><rect class="pin" x="3" y="83" width="10" height="6" rx="1"/><rect class="pin" x="119" y="83" width="10" height="6" rx="1"/><rect class="pin" x="3" y="102" width="10" height="6" rx="1"/><rect class="pin" x="119" y="102" width="10" height="6" rx="1"/><rect class="pin" x="3" y="121" width="10" height="6" rx="1"/><rect class="pin" x="119" y="121" width="10" height="6" rx="1"/><rect class="pkg" x="12" y="8" width="108" height="136" rx="10"/><text class="pkg-t" x="66" y="23">ATECC608</text><rect class="z cfg" x="22" y="31" width="88" height="18" rx="4"/><text class="z-t" x="28" y="44">rules</text><g class="lock cfg-lock"><path class="sh sh-open" d="M96.5 37.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 41.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="41" width="10" height="7" rx="1.5"/></g><rect class="t s0" x="22" y="56" width="19" height="13" rx="2"/><rect class="t d" x="45" y="56" width="19" height="13" rx="2"/><rect class="t d" x="68" y="56" width="19" height="13" rx="2"/><rect class="t d" x="91" y="56" width="19" height="13" rx="2"/><rect class="t d" x="22" y="73" width="19" height="13" rx="2"/><rect class="t d" x="45" y="73" width="19" height="13" rx="2"/><rect class="t d" x="68" y="73" width="19" height="13" rx="2"/><rect class="t d" x="91" y="73" width="19" height="13" rx="2"/><rect class="t s8" x="22" y="90" width="19" height="13" rx="2"/><rect class="t d" x="45" y="90" width="19" height="13" rx="2"/><rect class="t d" x="68" y="90" width="19" height="13" rx="2"/><rect class="t d" x="91" y="90" width="19" height="13" rx="2"/><rect class="t d" x="22" y="107" width="19" height="13" rx="2"/><rect class="t d" x="45" y="107" width="19" height="13" rx="2"/><rect class="t d" x="68" y="107" width="19" height="13" rx="2"/><rect class="t d" x="91" y="107" width="19" height="13" rx="2"/><text class="t-n n0" x="31.5" y="66">0</text><text class="t-n n8" x="31.5" y="100">8</text><rect class="z otp" x="22" y="126" width="66" height="12" rx="3"/><text class="z-t otp-t" x="28" y="135">OTP</text><text class="z-t rec" x="56" y="135">DK</text><g class="lock data-lock"><path class="sh sh-open" d="M96.5 128.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 132.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="132" width="10" height="7" rx="1.5"/></g></svg><b><span class="tag red">P5</span>Data locked</b><small>Zeros, the record. Slot 0 empty.</small></li>
+    <li><svg class="chip st-key" viewBox="0 0 132 150" role="img" aria-label="A key made in slot 0, not sealed yet"><rect class="pin" x="3" y="26" width="10" height="6" rx="1"/><rect class="pin" x="119" y="26" width="10" height="6" rx="1"/><rect class="pin" x="3" y="45" width="10" height="6" rx="1"/><rect class="pin" x="119" y="45" width="10" height="6" rx="1"/><rect class="pin" x="3" y="64" width="10" height="6" rx="1"/><rect class="pin" x="119" y="64" width="10" height="6" rx="1"/><rect class="pin" x="3" y="83" width="10" height="6" rx="1"/><rect class="pin" x="119" y="83" width="10" height="6" rx="1"/><rect class="pin" x="3" y="102" width="10" height="6" rx="1"/><rect class="pin" x="119" y="102" width="10" height="6" rx="1"/><rect class="pin" x="3" y="121" width="10" height="6" rx="1"/><rect class="pin" x="119" y="121" width="10" height="6" rx="1"/><rect class="pkg" x="12" y="8" width="108" height="136" rx="10"/><text class="pkg-t" x="66" y="23">ATECC608</text><rect class="z cfg" x="22" y="31" width="88" height="18" rx="4"/><text class="z-t" x="28" y="44">rules</text><g class="lock cfg-lock"><path class="sh sh-open" d="M96.5 37.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 41.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="41" width="10" height="7" rx="1.5"/></g><rect class="t s0" x="22" y="56" width="19" height="13" rx="2"/><rect class="t d" x="45" y="56" width="19" height="13" rx="2"/><rect class="t d" x="68" y="56" width="19" height="13" rx="2"/><rect class="t d" x="91" y="56" width="19" height="13" rx="2"/><rect class="t d" x="22" y="73" width="19" height="13" rx="2"/><rect class="t d" x="45" y="73" width="19" height="13" rx="2"/><rect class="t d" x="68" y="73" width="19" height="13" rx="2"/><rect class="t d" x="91" y="73" width="19" height="13" rx="2"/><rect class="t s8" x="22" y="90" width="19" height="13" rx="2"/><rect class="t d" x="45" y="90" width="19" height="13" rx="2"/><rect class="t d" x="68" y="90" width="19" height="13" rx="2"/><rect class="t d" x="91" y="90" width="19" height="13" rx="2"/><rect class="t d" x="22" y="107" width="19" height="13" rx="2"/><rect class="t d" x="45" y="107" width="19" height="13" rx="2"/><rect class="t d" x="68" y="107" width="19" height="13" rx="2"/><rect class="t d" x="91" y="107" width="19" height="13" rx="2"/><text class="t-n n0" x="31.5" y="66">0</text><text class="t-n n8" x="31.5" y="100">8</text><rect class="z otp" x="22" y="126" width="66" height="12" rx="3"/><text class="z-t otp-t" x="28" y="135">OTP</text><text class="z-t rec" x="56" y="135">DK</text><g class="lock data-lock"><path class="sh sh-open" d="M96.5 128.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 132.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="132" width="10" height="7" rx="1.5"/></g></svg><b><span class="tag">K1</span>Key made</b><small>By the chip's GenKey.</small></li>
+    <li class="perm"><svg class="chip st-sealed" viewBox="0 0 132 150" role="img" aria-label="Slot 0 sealed: the key can never change"><rect class="pin" x="3" y="26" width="10" height="6" rx="1"/><rect class="pin" x="119" y="26" width="10" height="6" rx="1"/><rect class="pin" x="3" y="45" width="10" height="6" rx="1"/><rect class="pin" x="119" y="45" width="10" height="6" rx="1"/><rect class="pin" x="3" y="64" width="10" height="6" rx="1"/><rect class="pin" x="119" y="64" width="10" height="6" rx="1"/><rect class="pin" x="3" y="83" width="10" height="6" rx="1"/><rect class="pin" x="119" y="83" width="10" height="6" rx="1"/><rect class="pin" x="3" y="102" width="10" height="6" rx="1"/><rect class="pin" x="119" y="102" width="10" height="6" rx="1"/><rect class="pin" x="3" y="121" width="10" height="6" rx="1"/><rect class="pin" x="119" y="121" width="10" height="6" rx="1"/><rect class="pkg" x="12" y="8" width="108" height="136" rx="10"/><text class="pkg-t" x="66" y="23">ATECC608</text><rect class="z cfg" x="22" y="31" width="88" height="18" rx="4"/><text class="z-t" x="28" y="44">rules</text><g class="lock cfg-lock"><path class="sh sh-open" d="M96.5 37.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 41.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="41" width="10" height="7" rx="1.5"/></g><rect class="t s0" x="22" y="56" width="19" height="13" rx="2"/><rect class="t d" x="45" y="56" width="19" height="13" rx="2"/><rect class="t d" x="68" y="56" width="19" height="13" rx="2"/><rect class="t d" x="91" y="56" width="19" height="13" rx="2"/><rect class="t d" x="22" y="73" width="19" height="13" rx="2"/><rect class="t d" x="45" y="73" width="19" height="13" rx="2"/><rect class="t d" x="68" y="73" width="19" height="13" rx="2"/><rect class="t d" x="91" y="73" width="19" height="13" rx="2"/><rect class="t s8" x="22" y="90" width="19" height="13" rx="2"/><rect class="t d" x="45" y="90" width="19" height="13" rx="2"/><rect class="t d" x="68" y="90" width="19" height="13" rx="2"/><rect class="t d" x="91" y="90" width="19" height="13" rx="2"/><rect class="t d" x="22" y="107" width="19" height="13" rx="2"/><rect class="t d" x="45" y="107" width="19" height="13" rx="2"/><rect class="t d" x="68" y="107" width="19" height="13" rx="2"/><rect class="t d" x="91" y="107" width="19" height="13" rx="2"/><text class="t-n n0" x="31.5" y="66">0</text><text class="t-n n8" x="31.5" y="100">8</text><rect class="z otp" x="22" y="126" width="66" height="12" rx="3"/><text class="z-t otp-t" x="28" y="135">OTP</text><text class="z-t rec" x="56" y="135">DK</text><g class="lock data-lock"><path class="sh sh-open" d="M96.5 128.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 132.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="132" width="10" height="7" rx="1.5"/></g></svg><b><span class="tag red">K3</span>Sealed</b><small>The key can't change again.</small></li>
+  </ol>
+</section>
+
+<section class="cer-sec" id="short">
+  <div class="cards two-up">
+    <div class="card">
+      <h4><span class="tag">1</span>Prepare the chip</h4>
+      <p>Write the rules, lock them, fill the unused slots with zeros, and lock the data zone. After that,
+        the chip's own rules let nothing write a key into slot 0. Only the chip's GenKey can make one there.</p>
+    </div>
+    <div class="card">
+      <h4><span class="tag">2</span>Make your key</h4>
+      <p>GenKey makes the key inside the chip. Test it, seal it, and work out its Safe signer address. The
+        key never leaves the chip, and there is nothing to write down.</p>
+    </div>
+  </div>
+  <p class="fine">Part 1 makes no key, so it can be done by someone else, and Part 2 still gives a key only you
+    asked for. That makes a <a href="#brand">branded key</a> possible later. To start with, you run both parts
+    on your own Cardputer.</p>
+</section>
+
+<section class="cer-sec" id="trust">
+  <h2>What you trust, and what you don't</h2>
+  <div class="cards">
+    <div class="card trust yes">
+      <span class="who">Trusted</span>
+      <h4>The chip</h4>
+      <p>Microchip's silicon makes the key with its own random number generator, and keeps it. An ATECC608
+        can't prove it is genuine, so buy it from a known seller.</p>
+    </div>
+    <div class="card trust yes">
+      <span class="who">Trusted</span>
+      <h4>The ceremony image you flash</h4>
+      <p>It is the one program that could cheat: before the data lock it could write a key it knows and say
+        GenKey made it. Build it yourself, or compare its SHA-256 with the page's.</p>
+    </div>
+    <div class="card trust no">
+      <span class="who">Not trusted</span>
+      <h4>The computer</h4>
+      <p>Nothing secret goes over the cable. What goes over USB is the rules, the public key and test
+        signatures.</p>
+    </div>
+    <div class="card trust no">
+      <span class="who">Not trusted</span>
+      <h4>Whoever ran Part 1</h4>
+      <p>After the data lock the chip refuses to write a key into slot 0, and K1 always makes a new one,
+        whatever was there.</p>
+    </div>
+  </div>
+  <p class="fine">The ceremony doesn't add secure boot. Anyone with the cable could still flash a signer
+    that shows one thing and signs another.</p>
+</section>
+
+<section class="cer-sec" id="part1">
+  <div class="part-head">
+    <span class="part-n">Part 1</span>
+    <h2>Prepare the chip</h2>
+    <p>Two permanent steps. After them, nothing can write a key into slot 0.</p>
+  </div>
+
+  <article class="step">
+    <div class="screens">
+      <figure class="screen"><img src="screens/ceremony-p1.png" width="720" height="405" alt="P1 Read the chip: ATECC608A, serial 0123 4a7b 9c2d 5e6f ee. Both zones open, nothing locked yet. Self-test passed. The factory config, sent to the log. Del Back, Enter Write the rules."></figure>
+      <figure class="screen small"><img src="screens/ceremony-p1-refused.png" width="720" height="405" alt="P1 refusing a chip: Can't prepare this chip, 0123 f3ac fd2a 826b ee. Its rules were locked before, and they aren't these. Nothing was written. Use a fresh chip."><figcaption>A used chip is refused, with nothing written. This is the first chip on my bench.</figcaption></figure>
+    </div>
+    <div class="step-text">
+      <p class="step-k"><span class="tag">P1</span>No changes</p>
+      <h3 class="step-title">Read the chip</h3>
+      <p>Reads everything. The page saves the factory config to the log.</p>
+      <dl>
+        <dt>Checks</dt><dd>It answers at 0x60. Revision <code>00006002</code>, a 608A. Both zones open
+          (<code>55 55</code>), slot locks <code>FF FF</code>. Random gives the fixed pattern of an unlocked
+          chip. SelfTest passes.</dd>
+        <dt>Refuses</dt><dd>A used chip, a TrustFLEX or Trust&amp;GO part (they come locked), an unknown
+          revision. It says why.</dd>
+        <dt>Then</dt><dd>Write the chip's serial, as the screen groups it, on a sticker on its board.</dd>
+      </dl>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="screens">
+      <figure class="screen"><img src="screens/ceremony-p2.png" width="720" height="405" alt="P2 Write the rules: written and read back, not locked yet. Config CRC 3fb5, in large type. The page works it out too. They should match."></figure>
+    </div>
+    <div class="step-text">
+      <p class="step-k"><span class="tag">P2</span>Can be written again</p>
+      <h3 class="step-title">Write the rules</h3>
+      <p>Writes <a href="#rules">the table</a> into the config zone, except the chip's own bytes (0–15 and
+        84–87), and reads it back.</p>
+      <dl>
+        <dt>Checks</dt><dd>The readback is the table. The screen shows the config CRC, and the page works it
+          out on its own from P1's saved bytes. The two should match.</dd>
+      </dl>
+    </div>
+  </article>
+
+  <article class="step perm">
+    <div class="screens">
+      <figure class="screen"><img src="screens/ceremony-p3-hold.png" width="720" height="405" alt="P3 Lock the rules, Permanent, in red. Locks the rules for good. The chip checks CRC 3fb5 first. If one byte differs, it locks nothing. The serial's last four typed: 5 e 6 f, from its sticker. Enter held, the red bar filling."></figure>
+    </div>
+    <div class="step-text">
+      <p class="step-k"><span class="tag red">P3</span>Permanent</p>
+      <h3 class="step-title">Lock the rules</h3>
+      <p>Lock, mode <code>0x00</code>, with that CRC. The chip works out the CRC of what it holds and refuses
+        if one byte differs. A refused lock locks nothing.</p>
+      <dl>
+        <dt>After</dt><dd>Config locked, the table unchanged, Random live.</dd>
+      </dl>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="screens">
+      <figure class="screen"><img src="screens/ceremony-p4.png" width="720" height="405" alt="P4 Zeros and the record: slots 1 to 15 zeros; the record, into OTP. Data CRC 0c3a. Rewritable until P5 locks it."></figure>
+    </div>
+    <div class="step-text">
+      <p class="step-k"><span class="tag">P4</span>Can be written again until P5</p>
+      <h3 class="step-title">Zeros and the record</h3>
+      <p>Zeros into slots 1–15, in 32-byte writes: before the data lock, the chip refuses 4-byte writes into
+        secret slots. <a href="#record">The record</a> into OTP. The screen shows the data CRC.</p>
+      <dl>
+        <dt>Checks</dt><dd>Each write is accepted. P5's CRC checks what they wrote.</dd>
+      </dl>
+    </div>
+  </article>
+
+  <article class="step perm">
+    <div class="screens">
+      <figure class="screen"><img src="screens/ceremony-p5.png" width="720" height="405" alt="P5 Lock the data, Permanent. Freezes every slot and the record, checked against CRC 0c3a. After this, only the chip's own GenKey can put a key in slot 0. The serial's last four typed, Enter held."></figure>
+    </div>
+    <div class="step-text">
+      <p class="step-k"><span class="tag red">P5</span>Permanent</p>
+      <h3 class="step-title">Lock the data</h3>
+      <p>Lock, mode <code>0x01</code>, with the CRC of every slot that isn't a key (1–15, in order), then the
+        OTP zone. Again, a single byte off and the chip locks nothing.</p>
+      <dl>
+        <dt>After</dt><dd>Data locked. OTP and slot 8 read in the clear; slot 1 can't be read. Slot 0's rules
+          now hold: no Write, no PrivWrite, only GenKey.</dd>
+      </dl>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="screens">
+      <figure class="screen"><img src="screens/ceremony-p6.png" width="720" height="405" alt="P6 Check: Ready for a key. Rules and data locked. Slot 0: empty, not sealed. Counter 0: 0, never used. Enter Make your key."></figure>
+    </div>
+    <div class="step-text">
+      <p class="step-k"><span class="tag">P6</span>No changes</p>
+      <h3 class="step-title">Check</h3>
+      <p>Reads it all back: both zones locked, the table, the record, counter 0. Slot 0 is checked empty with
+        Info, which doesn't count as a use, so a prepared chip leaves Part 1 with counter 0 at 0.</p>
+    </div>
+  </article>
+</section>
+
+<section class="cer-sec" id="keys">
+  <h2>The keys, and the gate in front of anything permanent</h2>
+  <div class="cards">
+    <div class="card"><h4><span class="kbd">Enter</span></h4><p>Does the step, or goes on.</p></div>
+    <div class="card"><h4><span class="kbd del">Del</span></h4><p>Backs out at any point, with one press. Nothing is written.</p></div>
+    <div class="card perm-card"><h4>A red page</h4><p>Type the last group of four in the chip's serial,
+      from its sticker, then hold <span class="kbd del sm">Enter</span> for 3 seconds while a bar fills.
+      Letting go early does nothing.</p></div>
+  </div>
+  <div class="pair">
+    <figure class="screen"><img src="screens/ceremony-p3.png" width="720" height="405" alt="P3 with two of the four characters typed: 5 e, then two empty boxes. Type all four first."><figcaption>The screen doesn't show the four. You read them off the chip in your hand, so the spare is never mistaken for the real one.</figcaption></figure>
+    <figure class="screen"><img src="screens/ceremony-p3-hold.png" width="720" height="405" alt="P3 with all four typed and Enter held: the red bar more than half full."><figcaption>Then hold Enter. The bar fills over 3 seconds, and only then does the chip get the Lock command.</figcaption></figure>
+  </div>
+</section>
+
+<section class="cer-sec" id="part2">
+  <div class="part-head">
+    <span class="part-n">Part 2</span>
+    <h2>Make your key</h2>
+    <p>One permanent step. Unplug before the seal, and you start again with a new key.</p>
+  </div>
+
+  <article class="step">
+    <div class="screens">
+      <figure class="screen"><img src="screens/ceremony-k1.png" width="720" height="405" alt="K1 Make your key: Made inside the chip. Nobody chooses it, and it can't be read out or copied. You can make it again until you seal it. Enter Make it."></figure>
+      <figure class="screen"><img src="screens/ceremony-k1-made.png" width="720" height="405" alt="K1 Your key: P-256, in slot 0, fingerprint 8c85 6dc3 17df 3805, with its blockie. Made by the chip's GenKey, just now. Slot 1 refuses GenKey. Not sealed yet. Next: test signatures."></figure>
+    </div>
+    <div class="step-text">
+      <p class="step-k"><span class="tag">K1</span>Can be made again until K3</p>
+      <h3 class="step-title">Make your key</h3>
+      <p>GenKey, mode <code>0x04</code>, on slot 0. Always, whatever is there: a key you didn't see made is
+        replaced, never used. Reads the public key and shows its fingerprint.</p>
+      <dl>
+        <dt>Checks</dt><dd>Slot 0 holds a valid key and its public key reads back. GenKey on slot 1 is
+          refused.</dd>
+      </dl>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="screens">
+      <figure class="screen"><img src="screens/ceremony-k2.png" width="720" height="405" alt="K2 Test it: test signature 1 valid, test signature 2 valid, slot 1 refuses to sign. Checked by the page, with WebCrypto. Counter 0 is now 3."></figure>
+    </div>
+    <div class="step-text">
+      <p class="step-k"><span class="tag">K2</span>No changes</p>
+      <h3 class="step-title">Test it</h3>
+      <p>Signs two test transactions, each the WebAuthn message over a Safe hash the device works out itself
+        from fixed fields: Base Sepolia, and a Safe address nobody controls, so the signatures can't approve
+        anything. Never a digest from the computer.</p>
+      <dl>
+        <dt>Checks</dt><dd>The page checks both with WebCrypto, as it checks a passkey's. Counter 0 went up by
+          exactly the signatures and key reads. Sign on slot 1 is refused.</dd>
+      </dl>
+    </div>
+  </article>
+
+  <article class="step perm">
+    <div class="screens">
+      <figure class="screen"><img src="screens/ceremony-k3.png" width="720" height="405" alt="K3 Seal your key, Permanent. Your key can never be changed or replaced. Lose the chip, and your Safe's other owners swap it out. The serial's last four typed, Enter held, the bar nearly full."></figure>
+    </div>
+    <div class="step-text">
+      <p class="step-k"><span class="tag red">K3</span>Permanent</p>
+      <h3 class="step-title">Seal your key</h3>
+      <p>Lock, mode <code>0x82</code>: slot 0 alone. From then on the chip refuses GenKey, Write and PrivWrite
+        on that slot. Sign and reading the public key still work.</p>
+      <dl>
+        <dt>After</dt><dd>The slot locks read <code>FE FF</code>. The public key is the one K2 tested, and one
+          more signature checks.</dd>
+      </dl>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="screens">
+      <figure class="screen"><img src="screens/ceremony-k4.png" width="720" height="405" alt="K4 Its address: Safe signer address, sealed key, 0xe46d…c916 with its blockie. A signer, not a wallet: don't send funds here. Funds go to your Safe."></figure>
+    </div>
+    <div class="step-text">
+      <p class="step-k"><span class="tag">K4</span>No changes</p>
+      <h3 class="step-title">Its address</h3>
+      <p>Works out the Safe signer address from the public key, with its blockie: the address Safe's passkey
+        factory gives this key, the same on every chain. The Cardputer's and the page's should match.</p>
+      <p class="fine">The key and address in these pictures are a test vector's (<code>vectors/webauthn.json</code>),
+        not a chip's. The serial and CRCs are a made-up chip's, worked out from the table.</p>
+    </div>
+  </article>
+</section>
+
+<section class="cer-sec" id="after">
+  <div class="cards two-up">
+    <div class="card">
+      <h4>Afterwards</h4>
+      <ol class="plain">
+        <li>Flash the signer back. Its idle screen shows the chip; the page shows the key and its address.</li>
+        <li>Check the address with the passkey factory's <code>getSigner</code> on Base Sepolia, from a block
+          explorer or <code>cast call</code>. This page doesn't: it loads nothing from anywhere else.</li>
+        <li>Add it as an owner of a testnet Safe, with a threshold you can reach without it, such as 2 of 3
+          with a passkey and a wallet.</li>
+        <li>Don't send funds to the address. It only signs.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h4>What to keep</h4>
+      <p>The page saves every line the ceremony prints:</p>
+      <ul class="plain">
+        <li>the serial, the revision and the factory config</li>
+        <li>the config CRC and the data CRC</li>
+        <li>the public key and the Safe signer address</li>
+        <li>counter 0 after each step</li>
+        <li>the ceremony image's commit and SHA-256</li>
+      </ul>
+      <p>Nothing in it is secret. There is no seed phrase and no backup: lose the chip, and the Safe's other
+        owners swap it out.</p>
+    </div>
+  </div>
+</section>
+
+<section class="cer-sec" id="rules">
+  <h2>The rules: diykey v1</h2>
+  <p class="sec-sub">Byte for byte the table the MicroPython signer locked on 2026-10-07. A new table would put
+    new unknowns on a permanent step.</p>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Slot</th><th>SlotConfig / KeyConfig</th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr><td><span class="sw s0"></span>0</td><td><code>0x2FA1</code> / <code>0x0033</code></td><td><b>Your key.</b> P-256, made by GenKey. External Sign only: no internal sign, no ECDH. Once the data zone is locked, never Write and never PrivWrite. Its public key can be read. Every signature raises counter 0. Lockable: K3 seals it.</td></tr>
+        <tr><td><span class="sw s8"></span>8</td><td><code>0x8F1F</code> / <code>0x001C</code></td><td>416 bytes of plain data, readable once the data zone is locked and never writable after it. Zeros on your own chip; a brand signature on a branded one.</td></tr>
+        <tr><td><span class="sw d"></span>1–7, 9–15</td><td><code>0x8F9F</code> / <code>0x001C</code></td><td><b>Dead.</b> Data, secret (never readable), never writable after the data lock, not lockable. Zeros.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <details class="hex-box">
+    <summary>All 128 bytes</summary>
+<pre class="hex">  0: 01 23 00 00 00 00 60 00 00 00 00 00 ee 00 00 00   <i>the chip's own bytes (never written)</i>
+ 16: c0 00 00 00 <b class="h0">a1 2f</b> 9f 8f 9f 8f 9f 8f 9f 8f 9f 8f
+ 32: 9f 8f 9f 8f <b class="h8">1f 8f</b> 9f 8f 9f 8f 9f 8f 9f 8f 9f 8f
+ 48: 9f 8f 9f 8f ff ff ff ff 00 00 00 00 ff ff ff ff
+ 64: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+ 80: 00 00 00 00 00 00 55 55 ff ff 00 00 00 00 00 00   <i>84-87 are the chip's own too</i>
+ 96: <b class="h0">33 00</b> 1c 00 1c 00 1c 00 1c 00 1c 00 1c 00 1c 00
+112: 1c 00 1c 00 1c 00 1c 00 1c 00 1c 00 1c 00 1c 00
+sha256 36da855657a3ee7e098f27cd17b2a636c9e51adec02d252ee0adbe905b8113e1</pre>
+    <p class="fine">I2C address 0x60. CountMatch off. A 1.3 s watchdog. Both counters at 0. SecureBoot, KDF,
+      IO protection, UseLock and VolatileKey off. The slot locks start at <code>FF FF</code>: a cleared bit at
+      the config lock would seal slot 0 before it ever had a key.</p>
+  </details>
+
+  <div class="cards two-up" id="record">
+    <div class="card">
+      <h4>The record, in OTP</h4>
+      <p>64 bytes, written at P4 and frozen by P5: <code>DK</code>, the layout and table versions, the serial,
+        the revision, the config CRC, the ceremony image's commit, who prepared it (its owner, or a diykey
+        bench), and for a branded chip its number and the brand key's id.</p>
+      <p>It holds no key, because there is no key yet when it's frozen. The signer always reads the live key.</p>
+    </div>
+    <div class="card">
+      <h4>Decisions behind it</h4>
+      <ul class="plain">
+        <li><b>No PIN.</b> The chip has no lockout: a 6-digit PIN falls in about 7 hours. The Safe's
+          threshold is the protection.</li>
+        <li><b>A use counter.</b> Every signature raises counter 0, which only goes up. After the data lock a
+          public-key read counts too.</li>
+        <li><b>Its own firmware image.</b> The write, lock and key commands live in a ceremony image. The
+          signer keeps read commands, plus Sign.</li>
+        <li><b>The chip says where you are.</b> Each step comes from the chip's state, so a restart resumes.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="cer-sec" id="emu">
+  <h2>In the emulator, the passkey's ceremony</h2>
+  <p class="sec-sub">At diykey.app the key is a passkey, and making one is this ceremony, run by your
+    authenticator.</p>
+  <div class="tbl-wrap">
+    <table class="tbl cmp">
+      <thead><tr><th></th><th>The chip</th><th>A passkey</th></tr></thead>
+      <tbody>
+        <tr><td>The rules</td><td>Yours, written and locked in Part 1</td><td>The authenticator maker's</td></tr>
+        <tr><td>Making the key</td><td>K1: GenKey, inside the chip</td><td>"Make a passkey": inside the Secure Enclave, a TPM or a security key</td></tr>
+        <tr><td>Testing it</td><td>K2</td><td>The page checks every signature</td></tr>
+        <tr><td>Sealing it</td><td>K3: the slot lock</td><td>It can't be changed, but a synced passkey is copied to your other devices</td></tr>
+        <tr><td>Its address</td><td>K4</td><td>The key card</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><a class="btn btn-primary" href="./">Make a passkey in the emulator</a></p>
+</section>
+
+<section class="cer-sec" id="brand">
+  <div class="part-head">
+    <span class="part-n opt">An option</span>
+    <h2>A branded key</h2>
+    <p>The project runs Part 1 on a bench. You run Part 2.</p>
+  </div>
+  <div class="brand-grid">
+    <div class="brand-text">
+      <p>Part 1 is where the mistakes happen: a table, two CRCs, two permanent locks and the silicon's
+        quirks. Part 2 is where the key is made. Because Part 1 makes no key, the project could prepare chips
+        on a bench, add a brand, and send them out. Each owner then makes their own key.</p>
+      <ul class="plain">
+        <li><b>The bench adds a brand at P4.</b> The record says "a diykey bench" and the chip's number, and
+          slot 8 holds the brand key's signature over the record.</li>
+        <li><b>Your Cardputer checks it before K1:</b> the signature, under the brand key pinned in the
+          firmware; the serial, revision and config CRC against the chip in front of it; both zones locked,
+          slot 0 not sealed. The check runs on the Cardputer or the page, never on the chip being checked: a
+          fake chip would just say yes.</li>
+        <li><b>The brand key is diykey key 0000:</b> a Cardputer and a chip through the whole ceremony, its log
+          published. It signs a brand the way the signer signs a transaction: from fields it shows, a digest
+          it works out itself, Sign held. It is never a Safe owner.</li>
+      </ul>
+    </div>
+    <div class="brand-side">
+      <div class="label" aria-label="A proposed bag label">
+        <img src="screens/ceremony-brand-label.png" width="96" height="96" alt="The brand picture, a blockie">
+        <div>
+          <span class="label-k">diykey key</span>
+          <b>0042</b>
+          <span class="mono">0123 4a7b 9c2d 5e6f ee</span>
+          <span class="label-warn">No key inside yet. Your Cardputer makes it.</span>
+        </div>
+      </div>
+      <div class="pair tight">
+        <figure class="screen"><img src="screens/ceremony-brand.png" width="720" height="405" alt="Check the brand: diykey key 0042, with the same blockie as the label. Does your label say 0042? Signed by diykey key 0000. Serial and rules: this chip's. Locked, slot 0 empty, unused. Del No, Enter Yes, it matches."></figure>
+        <figure class="screen"><img src="screens/ceremony-brand-bad.png" width="720" height="405" alt="Check the brand, stop: Not a diykey brand. Its signature doesn't verify. Nothing was written. Don't use this chip, and tell the project the number on its label."></figure>
+      </div>
+    </div>
+  </div>
+  <div class="cards two-up">
+    <div class="card trust yes"><span class="who">What a brand proves</span><p>That the project's key signed this
+      serial's record, for this table, and that the chip in front of you has that serial and that table,
+      locked.</p></div>
+    <div class="card trust no"><span class="who">What it doesn't</span><p>That the silicon is the chip the bench
+      branded. An ATECC608 has no factory certificate, so a fake could copy a real chip's serial, OTP and
+      slot 8. A public list with one claim per serial limits that. Nothing more does.</p></div>
+  </div>
+  <p class="verdict-line"><b>For the launch, no brand.</b> People who build one buy their own breakout, and the
+    one to trust for Part 1 is themselves. A brand is worth its cost (key 0000's ceremony, a bench image, the
+    check, labels, a public list) when the project hands out chips. Every chip gets slot 8 readable from the
+    start, so a branded chip and your own run the same table.</p>
+</section>
+
+<section class="cer-sec" id="silicon">
+  <h2>What has run on silicon</h2>
+  <p class="sec-sub">From the MicroPython signer, on a Raspberry Pi Pico 2 W, with Adafruit 4314 breakouts
+    (ATECC608A, revision <code>00006002</code>). Its code isn't in this repository.</p>
+  <ol class="when">
+    <li>
+      <time datetime="2026-09-26">2026-09-26</time>
+      <div><b>A fresh chip, the whole ceremony in the older order:</b> the key made and sealed before the data
+        lock, slot 8 secret. It settled the CRC's byte order in Lock, the data CRC's layout, that the chip
+        refuses 4-byte writes into secret slots before the data lock and takes 32-byte ones, and that once the
+        data zone is locked, a public-key read counts as a use.</div>
+    </li>
+    <li>
+      <time datetime="2026-10-07">2026-10-07</time>
+      <div><b>A spare, with this table and in this order:</b> the data lock, then the key, then the seal. GenKey
+        works after the data lock on a slot that never held a key, and slot 8 reads in the clear and is in the
+        data CRC. Refused afterwards, with counter 0 unmoved: GenKey on the sealed slot and on slot 1, Write to
+        slots 0, 1 and 8, to OTP and the config, both zone locks again, Sign and Read on slot 1. A signature
+        from it passed Safe's <code>isValidSignatureForSigner</code> on Base Sepolia; a wrong hash didn't.</div>
+    </li>
+  </ol>
+  <div class="cards">
+    <div class="card"><h4>Not run yet: a 608B</h4><p>Adafruit doesn't say which part the 4314 carries now. P1
+      refuses revision <code>00006003</code> until a spare 608B has been through.</p></div>
+    <div class="card"><h4>Not run yet: the Cardputer</h4><p>Everything above ran from MicroPython on a Pico. The
+      Rust driver's waits and the chip's power through the AMS1117 are new. A spare settles both.</p></div>
+    <div class="card"><h4>Left untested: PrivWrite</h4><p>After the data lock it should be refused. Testing it
+      needs the command, and the signer won't have one.</p></div>
+  </div>
+</section>
+
+<section class="cer-sec" id="next">
+  <h2>What it would take</h2>
+  <ol class="todo">
+    <li class="done"><b>The plan</b> (<a href="https://github.com/jmcpheron/diykey/blob/main/docs/CEREMONY.md">docs/CEREMONY.md</a>) and these pages, drawn as mockups.</li>
+    <li><b>The write, lock and key commands</b>, in their own file, <code>core/src/ceremony.rs</code>. The signer's
+      <code>atecc.rs</code> keeps read commands only.</li>
+    <li><b>A virtual ATECC608 for the tests</b> that refuses what the silicon refused, walked through P1 to K4
+      with a restart after every step.</li>
+    <li><b>The ceremony image</b>: these pages, the serial gate, the hold.</li>
+    <li><b>Sign</b>, with milestone 3: K2 and the signer use the same code.</li>
+    <li><b>The address on the Cardputer</b>, checked against <code>vectors/webauthn.json</code>.</li>
+    <li><b>This site</b>: the ceremony image beside the signer's, the log, and a rehearsal on the virtual chip.</li>
+    <li><b>A spare chip</b> through P1 to K4, written up in the build log.</li>
+    <li><b>The first real key</b>: the fresh chip on my bench, serial <code>01233859…</code>.</li>
+  </ol>
+  <div class="buy">
+    <div>
+      <h4>Before you buy</h4>
+      <p>A Cardputer v1.1, two ATECC608 breakouts (one is the spare), an AMS1117-3.3 module and a Grove cable:
+        <a href="https://github.com/jmcpheron/diykey/blob/main/hardware/README.md#shopping-list">the shopping list</a>.</p>
+    </div>
+    <p class="warn-box"><b>Not the Cardputer-Adv.</b> The v1.1 is being discontinued, and its successor reads its
+      keyboard over I2C on G8, G9 and G11, the pins this firmware drives as outputs. Don't flash the signer on an
+      Adv. And buy a blank chip: TrustFLEX and Trust&amp;GO parts come locked.</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <span>diykey · an experiment, testnet only, not audited · started from Austin Griffith's picowallet · <a href="https://github.com/jmcpheron/diykey">source</a></span>
+  <span class="muted">This page loads nothing from anywhere else.</span>
+</footer>
+</body>
+</html>

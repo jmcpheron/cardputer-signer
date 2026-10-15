@@ -113,4 +113,5 @@ band under the bench.
 ## Next
 
 - Milestone 3: hold to sign with the chip, over the hash the device worked out.
+- The key ceremony ([CEREMONY.md](CEREMONY.md)), on a spare chip first.
 - A case for the regulator and the chip.

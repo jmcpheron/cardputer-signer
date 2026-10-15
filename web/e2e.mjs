@@ -3,7 +3,7 @@
 // Serves the repository on localhost, starts headless Chrome with a virtual WebAuthn authenticator
 // (the DevTools protocol's), and drives the page with real key presses: make a passkey, send a
 // transaction, page to the hash, sign, and check the signature verified; then a wrong claim, which
-// must not sign. Needs `web/build.sh` first, and Chrome (CHROME=/path/to/chrome if not found).
+// must not sign. Last, the key ceremony's page at a phone's width. Needs `web/build.sh` first, and Chrome (CHROME=/path/to/chrome if not found).
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { createServer } from "node:http";
@@ -136,6 +136,14 @@ try {
   await press("Backspace", "Backspace");
   check(await evaluate('document.getElementById("log").textContent.includes("= rejected")'), "Del (Backspace) rejects it");
   check(errors.length === 0, "no errors in the page" + (errors.length ? ": " + errors.join("; ") : ""));
+
+  // The key ceremony's page, on a phone: every picture loads under its CSP, and nothing scrolls sideways.
+  await page("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await page("Page.navigate", { url: new URL("ceremony.html", process.env.E2E_URL || `http://localhost:${port}/web/`).href });
+  await until('document.querySelector(".cer-hero h1") && document.readyState === "complete"', "the ceremony page");
+  check(await evaluate("document.images.length > 15 && [...document.images].every(i => i.complete && i.naturalWidth > 0)"),
+    `the ceremony page: all ${await evaluate("document.images.length")} pictures load, under its CSP`);
+  check(await evaluate("document.documentElement.scrollWidth <= innerWidth"), "the ceremony page fits a phone's width");
 } catch (e) {
   failed++;
   console.log("FAIL " + e.message);

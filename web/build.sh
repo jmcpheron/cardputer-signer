@@ -1,7 +1,8 @@
 #!/bin/sh
 # Builds what web/ serves but git doesn't keep:
 #   web/screens/   every page of every vector, drawn by core exactly as the Cardputer draws them,
-#                  and reviews.json: what the device says about each (summary, items, level, pages)
+#                  and reviews.json: what the device says about each (summary, items, level, pages);
+#                  and ceremony-*.png, the key ceremony's pages as mockups (core/examples/ceremony.rs)
 #   web/emu/       signer.wasm: the emulator, core in WebAssembly (wasm/)
 #   web/firmware/  the firmware as one image for address 0 (bootloader, partition table, app),
 #                  and firmware.json with its size, SHA-256 and the commit it was built from
@@ -12,6 +13,7 @@ cd "$(dirname "$0")/.."
 
 rm -rf web/screens && mkdir -p web/screens web/emu web/firmware
 (cd core && cargo run --locked --quiet --example screens -- ../web/screens all) >/dev/null
+(cd core && cargo run --locked --quiet --example ceremony -- ../web/screens) >/dev/null
 (cd wasm && cargo build --release --locked --quiet --target wasm32-unknown-unknown)
 cp wasm/target/wasm32-unknown-unknown/release/signer_emu.wasm web/emu/signer.wasm
 
@@ -47,7 +49,10 @@ for f in sorted(glob.glob("web/screens/*.png")):
         out += struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d))
     open(f, "wb").write(out)
 
-print(f"web/screens: {len(glob.glob('web/screens/*.png'))} pages for {len(json.load(open('web/screens/reviews.json')))} transactions")
+pages = glob.glob("web/screens/*.png")
+ceremony = [f for f in pages if "/ceremony-" in f]
+print(f"web/screens: {len(pages) - len(ceremony)} pages for {len(json.load(open('web/screens/reviews.json')))} transactions, "
+      f"{len(ceremony)} for the key ceremony")
 print(f"web/emu: signer.wasm, {len(open('web/emu/signer.wasm', 'rb').read()):,} bytes")
 try:
     img = open("web/firmware/cardputer-signer.bin", "rb").read()

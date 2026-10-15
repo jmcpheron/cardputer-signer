@@ -15,9 +15,10 @@ crate, a network path or a new way to sign without asking.
    to sign only its own hash, from its hash page, and never when the claimed hash differs. The page
    (`web/`) passes on only the hash the emulator asked for.
 2. **Keys stay in their chips, and locks are permanent.** Nothing reads a private key out or signs an
-   arbitrary digest. `core/src/atecc.rs` holds read commands only. Don't add a command that writes,
-   locks, or makes a key (Write, Lock, GenKey with a new key, PrivWrite) unless the person asked for
-   exactly that. An ATECC608's locks can't be undone.
+   arbitrary digest. `core/src/atecc.rs` holds read commands only. The key ceremony's commands that
+   write, lock, make a key and sign (`core/src/ceremony.rs`) were asked for, and only the ceremony
+   image uses them. Don't add others (PrivWrite, a lock without its CRC, a sign of a digest from
+   outside) unless the person asked for exactly that. An ATECC608's locks can't be undone.
 3. **Don't flash a board unless asked.** Flashing replaces what's on it.
 4. **No secrets in the repository**, nor in tests, logs or screenshots. Testnet only.
    This repository has its own history: don't add another project's remote or push to one.

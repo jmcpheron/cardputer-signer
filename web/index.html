@@ -168,6 +168,19 @@
   </section>
 </section>
 
+<section class="cer" id="cer" hidden aria-live="polite">
+  <div class="cer-head">
+    <div>
+      <p class="eyebrow">The key ceremony</p>
+      <h2 id="cer-title">Connected to the ceremony image</h2>
+      <p class="muted" id="cer-sub">Do each step on the Cardputer. This page checks what it prints, on its own.</p>
+    </div>
+    <button id="cer-save" class="btn">Save the log</button>
+  </div>
+  <dl class="fw cer-vals" id="cer-vals"></dl>
+  <ul class="cer-checks" id="cer-checks"></ul>
+</section>
+
 <main class="detail" id="detail">
   <div class="detail-head">
     <div class="chips" id="d-chips"></div>
@@ -200,13 +213,21 @@
 <section class="flash" id="flash">
   <div class="flash-text">
     <p class="eyebrow">Firmware</p>
-    <h2>Flash the signer onto a Cardputer</h2>
-    <p>One image at address 0: the bootloader, the partition table and the signer, built from this
-      repository by <code>web/build.sh</code>. The browser checks its SHA-256 before writing.</p>
+    <h2>Flash a Cardputer</h2>
+    <p>Two images, each one file at address 0: the bootloader, the partition table and the program,
+      built from this repository by <code>web/build.sh</code>. The browser checks its SHA-256 before
+      writing.</p>
+    <p><b>The signer</b> reviews transactions and only reads the chip. <b>The key ceremony</b> is the
+      only image that writes to the chip, locks it, and makes its key: two of its steps and the seal
+      can't be undone (<a href="ceremony.html">how it goes</a>). Run it on a spare chip first, then
+      flash the signer back.</p>
     <p class="warn-box"><b>This replaces whatever is on the board.</b> To keep what's there, save a full image
       first: <code>esptool.py read_flash 0 ALL backup.bin</code>.</p>
   </div>
   <div class="flash-card">
+    <div class="modes fw-pick" id="fw-pick" role="tablist" aria-label="Which image">
+      <button data-img="signer" class="on" role="tab">The signer</button><button data-img="ceremony" role="tab">The key ceremony</button>
+    </div>
     <dl class="fw" id="fw-info"><dt>Image</dt><dd class="muted">loading…</dd></dl>
     <label class="check"><input type="checkbox" id="fw-ok"> I understand this replaces what's on the board.</label>
     <button id="flash-btn" class="btn btn-danger btn-big" disabled>Flash firmware</button>

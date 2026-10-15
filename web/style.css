@@ -401,6 +401,21 @@ a { color: var(--accent); }
 #fw-stage { font-size: 13px; color: var(--muted); }
 
 /* console */
+.fw-pick { align-self: flex-start; }
+.cer { max-width: 1440px; margin: 20px auto 0; padding: 24px 32px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-sizing: border-box; width: calc(100% - 64px); }
+.cer[hidden] { display: none; }
+.cer-head { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
+.cer-head h2 { font-size: 22px; margin: 0 0 6px; }
+.cer-head p { margin: 0; }
+.cer-vals { margin-top: 16px; }
+.cer-checks { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.cer-checks li::before { display: inline-block; width: 1.4em; font-weight: 700; }
+.cer-checks .yes::before { content: "✓"; color: var(--ok); }
+.cer-checks .no::before { content: "✗"; color: var(--bad); }
+.cer-checks .unk::before { content: "?"; color: var(--warn); }
+.cer-checks .step { color: var(--faint); margin-right: 6px; }
+.cer-checks .why { color: var(--muted); }
+.cer .stop { color: var(--bad); }
 .console { max-width: 1440px; margin: 28px auto 0; padding: 0 32px; }
 .console details { background: #07080b; border: 1px solid var(--line); border-radius: var(--r); padding: 14px 18px; }
 .console summary { cursor: pointer; font-weight: 650; }
@@ -447,6 +462,7 @@ a { color: var(--accent); }
   .device-strip { grid-template-columns: 1fr 1fr; }
   .tile-chip { grid-column: span 2; }
   .notice { margin: 12px 16px 0; }
+  .cer { width: calc(100% - 32px); padding: 18px 16px; }
 
   /* the run from the top down, in the order it happens: the key, this computer sends the fields,
      the Cardputer shows them, the steps so far, then the two hashes side by side */

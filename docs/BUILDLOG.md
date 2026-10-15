@@ -110,8 +110,34 @@ and over the key's wires when the signer reads its key. "This computer" shows wh
 what came back, with the cable plugged in between, and the two hashes and the signature sit in a
 band under the bench.
 
+## 2026-10-15: the key ceremony, built
+
+The ceremony in [CEREMONY.md](CEREMONY.md) is now an image of its own (`firmware/src/bin/ceremony.rs`),
+beside the signer on the page's flash card. Its commands that write, lock, make a key and sign are
+in `core/src/ceremony.rs`; the signer still uses only `atecc.rs`, and `web/build.sh` stops if the
+signer's image holds any ceremony code. The hardware code moved into `firmware/src/lib.rs`, shared by
+both images, so the signer's image hash changed; its screens didn't.
+
+Checked on the laptop, not on a chip:
+- `cargo test`: the whole ceremony, P1 to K4, on a virtual ATECC608A that refuses what the silicon
+  refused, through the device's own pages and keys. A restart after every step lands where the chip
+  is; Del on every page writes nothing; a wrong serial, or Enter let go early, locks nothing; a lock
+  with a wrong CRC, or a data lock without the zeros, is refused; the cable pulled in the middle of
+  P4 or K2, then a restart, finishes. Seen failing with P4 skipping slot 15, and with the gate taking
+  any four.
+- The rehearsal's config and data CRCs (3fb5, 0c3a) are the ones the mockups had worked out, and its
+  P3 pages came out pixel for pixel the same as the mockups.
+- `node web/test.mjs`: the page's own checks of the rehearsal's log pass, and fail with a byte
+  changed in a signature, the factory config, the data CRC or the address.
+- `node web/e2e.mjs`: the page connected to a pretend Cardputer over Web Serial shows every check
+  passed.
+- Both images build (signer 226 KB, ceremony 239 KB, with a hand-installed esp
+  toolchain, so CI's hashes will differ).
+
+Not checked: anything on a Cardputer or a chip. Next is a spare chip from P1 to K4.
+
 ## Next
 
 - Milestone 3: hold to sign with the chip, over the hash the device worked out.
-- The key ceremony ([CEREMONY.md](CEREMONY.md)), on a spare chip first.
+- The key ceremony ([CEREMONY.md](CEREMONY.md)) on a spare chip, from P1 to K4.
 - A case for the regulator and the chip.

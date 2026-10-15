@@ -137,7 +137,7 @@ fn amount(f: &mut Frame, s: &str, y: i32) -> i32 {
     y
 }
 
-fn short(a: &Address) -> Buf<16> {
+pub(crate) fn short(a: &Address) -> Buf<16> {
     let mut h = [0u8; 40];
     let s = hex::encode(a, &mut h);
     let mut b = Buf::new();
@@ -152,7 +152,7 @@ fn nonce(n: &safe_tx::U256) -> Buf<80> {
 }
 
 /// `s` cut with an ellipsis to fit `w` pixels.
-fn fit(s: &str, w: i32, face: Face) -> Buf<160> {
+pub(crate) fn fit(s: &str, w: i32, face: Face) -> Buf<160> {
     let f = font::get(face);
     if f.width(s) <= w {
         return Buf::from(s);
@@ -174,7 +174,7 @@ fn fit(s: &str, w: i32, face: Face) -> Buf<160> {
 
 /// Wrapped text from y, stopping before `bottom`. Returns the y after it.
 #[allow(clippy::too_many_arguments)]
-fn para(f: &mut Frame, s: &str, x: i32, y: i32, w: i32, face: Face, fg: Rgb, bottom: i32) -> i32 {
+pub(crate) fn para(f: &mut Frame, s: &str, x: i32, y: i32, w: i32, face: Face, fg: Rgb, bottom: i32) -> i32 {
     let font = font::get(face);
     let pitch = font.height as i32 - 2;
     let (mut y, mut line): (i32, Buf<120>) = (y, Buf::new());
@@ -204,7 +204,7 @@ fn para(f: &mut Frame, s: &str, x: i32, y: i32, w: i32, face: Face, fg: Rgb, bot
 
 /// A keycap and what it does, on the footer line. Returns its width.
 #[allow(clippy::too_many_arguments)]
-fn key(f: &mut Frame, k: &str, label: &str, x: i32, fill: Rgb, ink: Rgb, lab: Rgb, right: bool) -> i32 {
+pub(crate) fn key(f: &mut Frame, k: &str, label: &str, x: i32, fill: Rgb, ink: Rgb, lab: Rgb, right: bool) -> i32 {
     let kw = font::get(Face::Bold14).width(k) + 10;
     let w = kw + 5 + font::get(Face::Sans12).width(label);
     let x = if right { x - w } else { x };

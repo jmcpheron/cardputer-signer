@@ -9,4 +9,5 @@ publish = false
 sha3 = { version = "=0.10.8", default-features = false }
 
 [dev-dependencies]
+p256 = { version = "=0.13.2", default-features = false, features = ["ecdsa"] }
 serde_json = "=1.0.154"

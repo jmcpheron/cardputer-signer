@@ -1,8 +1,23 @@
 fn main() {
+    commit();
     linker_be_nice();
     check_xtensa_linker_available();
     // make sure linkall.x is the last linker script (otherwise might cause problems with flip-link)
     println!("cargo:rustc-link-arg=-Tlinkall.x");
+}
+
+/// The commit the image is built from, for the ceremony's record: DIYKEY_COMMIT if set (web/build.sh
+/// sets it), else git's HEAD, else zeros.
+fn commit() {
+    println!("cargo:rerun-if-env-changed=DIYKEY_COMMIT");
+    println!("cargo:rerun-if-changed=../.git/HEAD");
+    println!("cargo:rerun-if-changed=../.git/refs/heads");
+    let head = std::env::var("DIYKEY_COMMIT").ok().or_else(|| {
+        let out = std::process::Command::new("git").args(["rev-parse", "HEAD"]).output().ok()?;
+        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    });
+    let head = head.filter(|h| h.len() == 40 && h.bytes().all(|c| c.is_ascii_hexdigit()));
+    println!("cargo:rustc-env=DIYKEY_COMMIT={}", head.unwrap_or_else(|| "0".repeat(40)));
 }
 
 #[cfg(unix)]

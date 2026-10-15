@@ -35,10 +35,12 @@
   <p class="lede">How a fresh ATECC608 becomes a diykey key. Its rules are written and locked. Then the chip
     makes a key that can't be read out, and the key is sealed. Two parts and ten steps, three of them
     permanent, all on the Cardputer's own screen and keys.</p>
-  <p class="plan-note"><b>A plan. No firmware runs it yet.</b> The screens on this page are mockups, drawn by
-    the signer's own drawing code and fonts the way the Cardputer would draw them
-    (<code>core/examples/ceremony.rs</code>). The steps themselves ran on silicon, from the MicroPython
-    signer this one was ported from, on two ATECC608A chips (<a href="#silicon">what ran</a>).</p>
+  <p class="plan-note"><b>Built, and not yet run on a chip.</b> The ceremony image is on the
+    <a href="index.html#flash">flash card</a>, beside the signer, and the page checks what it prints. The
+    screens below are that image's own pages, drawn by its code on a laptop, from a rehearsal on a
+    virtual chip (<code>core/examples/ceremony.rs</code>). The steps ran on silicon from the MicroPython
+    signer this one was ported from, on two ATECC608A chips (<a href="#silicon">what ran</a>); this
+    firmware hasn't run them yet. Run a spare chip first.</p>
 
   <ol class="life" aria-label="The chip through the ceremony">
     <li><svg class="chip st-factory" viewBox="0 0 132 150" role="img" aria-label="A factory chip: nothing locked, every slot unknown"><rect class="pin" x="3" y="26" width="10" height="6" rx="1"/><rect class="pin" x="119" y="26" width="10" height="6" rx="1"/><rect class="pin" x="3" y="45" width="10" height="6" rx="1"/><rect class="pin" x="119" y="45" width="10" height="6" rx="1"/><rect class="pin" x="3" y="64" width="10" height="6" rx="1"/><rect class="pin" x="119" y="64" width="10" height="6" rx="1"/><rect class="pin" x="3" y="83" width="10" height="6" rx="1"/><rect class="pin" x="119" y="83" width="10" height="6" rx="1"/><rect class="pin" x="3" y="102" width="10" height="6" rx="1"/><rect class="pin" x="119" y="102" width="10" height="6" rx="1"/><rect class="pin" x="3" y="121" width="10" height="6" rx="1"/><rect class="pin" x="119" y="121" width="10" height="6" rx="1"/><rect class="pkg" x="12" y="8" width="108" height="136" rx="10"/><text class="pkg-t" x="66" y="23">ATECC608</text><rect class="z cfg" x="22" y="31" width="88" height="18" rx="4"/><text class="z-t" x="28" y="44">rules</text><g class="lock cfg-lock"><path class="sh sh-open" d="M96.5 37.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 41.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="41" width="10" height="7" rx="1.5"/></g><rect class="t s0" x="22" y="56" width="19" height="13" rx="2"/><rect class="t d" x="45" y="56" width="19" height="13" rx="2"/><rect class="t d" x="68" y="56" width="19" height="13" rx="2"/><rect class="t d" x="91" y="56" width="19" height="13" rx="2"/><rect class="t d" x="22" y="73" width="19" height="13" rx="2"/><rect class="t d" x="45" y="73" width="19" height="13" rx="2"/><rect class="t d" x="68" y="73" width="19" height="13" rx="2"/><rect class="t d" x="91" y="73" width="19" height="13" rx="2"/><rect class="t s8" x="22" y="90" width="19" height="13" rx="2"/><rect class="t d" x="45" y="90" width="19" height="13" rx="2"/><rect class="t d" x="68" y="90" width="19" height="13" rx="2"/><rect class="t d" x="91" y="90" width="19" height="13" rx="2"/><rect class="t d" x="22" y="107" width="19" height="13" rx="2"/><rect class="t d" x="45" y="107" width="19" height="13" rx="2"/><rect class="t d" x="68" y="107" width="19" height="13" rx="2"/><rect class="t d" x="91" y="107" width="19" height="13" rx="2"/><text class="t-n n0" x="31.5" y="66">0</text><text class="t-n n8" x="31.5" y="100">8</text><rect class="z otp" x="22" y="126" width="66" height="12" rx="3"/><text class="z-t otp-t" x="28" y="135">OTP</text><text class="z-t rec" x="56" y="135">DK</text><g class="lock data-lock"><path class="sh sh-open" d="M96.5 128.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 132.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="132" width="10" height="7" rx="1.5"/></g></svg><b>Factory</b><small>Nothing locked. Its rules are Microchip's.</small></li>
@@ -226,7 +228,7 @@
   <article class="step">
     <div class="screens">
       <figure class="screen"><img src="screens/ceremony-k1.png" width="720" height="405" alt="K1 Make your key: Made inside the chip. Nobody chooses it, and it can't be read out or copied. You can make it again until you seal it. Enter Make it."></figure>
-      <figure class="screen"><img src="screens/ceremony-k1-made.png" width="720" height="405" alt="K1 Your key: P-256, in slot 0, fingerprint 8c85 6dc3 17df 3805, with its blockie. Made by the chip's GenKey, just now. Slot 1 refuses GenKey. Not sealed yet. Next: test signatures."></figure>
+      <figure class="screen"><img src="screens/ceremony-k1-made.png" width="720" height="405" alt="K1 Your key: P-256, in slot 0, fingerprint 196c 05cd 39d6 3dc1, with its blockie. Made by the chip's GenKey, just now. Slot 1 refuses GenKey. Not sealed yet. Next: test signatures."></figure>
     </div>
     <div class="step-text">
       <p class="step-k"><span class="tag">K1</span>Can be made again until K3</p>
@@ -242,7 +244,7 @@
 
   <article class="step">
     <div class="screens">
-      <figure class="screen"><img src="screens/ceremony-k2.png" width="720" height="405" alt="K2 Test it: test signature 1 valid, test signature 2 valid, slot 1 refuses to sign. Checked by the page, with WebCrypto. Counter 0 is now 3."></figure>
+      <figure class="screen"><img src="screens/ceremony-k2.png" width="720" height="405" alt="K2 Test it: test signature 1 sent to the page, test signature 2 sent to the page, slot 1 refuses to sign, counter 0 from 1 to 3. Seal it once the page says both are valid."></figure>
     </div>
     <div class="step-text">
       <p class="step-k"><span class="tag">K2</span>No changes</p>
@@ -275,15 +277,15 @@
 
   <article class="step">
     <div class="screens">
-      <figure class="screen"><img src="screens/ceremony-k4.png" width="720" height="405" alt="K4 Its address: Safe signer address, sealed key, 0xe46d…c916 with its blockie. A signer, not a wallet: don't send funds here. Funds go to your Safe."></figure>
+      <figure class="screen"><img src="screens/ceremony-k4.png" width="720" height="405" alt="K4 Its address: Safe signer address, sealed key, 0x6c46…3f9f with its blockie. A signer, not a wallet: don't send funds here. Funds go to your Safe."></figure>
     </div>
     <div class="step-text">
       <p class="step-k"><span class="tag">K4</span>No changes</p>
       <h3 class="step-title">Its address</h3>
       <p>Works out the Safe signer address from the public key, with its blockie: the address Safe's passkey
         factory gives this key, the same on every chain. The Cardputer's and the page's should match.</p>
-      <p class="fine">The key and address in these pictures are a test vector's (<code>vectors/webauthn.json</code>),
-        not a chip's. The serial and CRCs are a made-up chip's, worked out from the table.</p>
+      <p class="fine">The serial, CRCs, key and address in these pictures are the virtual chip's, from the
+        rehearsal: its key was made by the p256 crate, not a chip.</p>
     </div>
   </article>
 </section>
@@ -467,7 +469,7 @@ sha256 36da855657a3ee7e098f27cd17b2a636c9e51adec02d252ee0adbe905b8113e1</pre>
     <div class="card"><h4>Not run yet: a 608B</h4><p>Adafruit doesn't say which part the 4314 carries now. P1
       refuses revision <code>00006003</code> until a spare 608B has been through.</p></div>
     <div class="card"><h4>Not run yet: the Cardputer</h4><p>Everything above ran from MicroPython on a Pico. The
-      Rust driver's waits and the chip's power through the AMS1117 are new. A spare settles both.</p></div>
+      Rust image's commands, its waits and the chip's power through the AMS1117 are new. A spare settles them.</p></div>
     <div class="card"><h4>Left untested: PrivWrite</h4><p>After the data lock it should be refused. Testing it
       needs the command, and the signer won't have one.</p></div>
   </div>
@@ -476,15 +478,17 @@ sha256 36da855657a3ee7e098f27cd17b2a636c9e51adec02d252ee0adbe905b8113e1</pre>
 <section class="cer-sec" id="next">
   <h2>What it would take</h2>
   <ol class="todo">
-    <li class="done"><b>The plan</b> (<a href="https://github.com/jmcpheron/diykey/blob/main/docs/CEREMONY.md">docs/CEREMONY.md</a>) and these pages, drawn as mockups.</li>
-    <li><b>The write, lock and key commands</b>, in their own file, <code>core/src/ceremony.rs</code>. The signer's
-      <code>atecc.rs</code> keeps read commands only.</li>
-    <li><b>A virtual ATECC608 for the tests</b> that refuses what the silicon refused, walked through P1 to K4
+    <li class="done"><b>The plan</b> (<a href="https://github.com/jmcpheron/diykey/blob/main/docs/CEREMONY.md">docs/CEREMONY.md</a>) and these pages.</li>
+    <li class="done"><b>The write, lock and key commands</b>, in their own file, <code>core/src/ceremony.rs</code>. The signer's
+      <code>atecc.rs</code> keeps read commands only, and the signer's image holds none of the ceremony's code.</li>
+    <li class="done"><b>A virtual ATECC608 for the tests</b> that refuses what the silicon refused, walked through P1 to K4
       with a restart after every step.</li>
-    <li><b>The ceremony image</b>: these pages, the serial gate, the hold.</li>
-    <li><b>Sign</b>, with milestone 3: K2 and the signer use the same code.</li>
-    <li><b>The address on the Cardputer</b>, checked against <code>vectors/webauthn.json</code>.</li>
-    <li><b>This site</b>: the ceremony image beside the signer's, the log, and a rehearsal on the virtual chip.</li>
+    <li class="done"><b>The ceremony image</b>: these pages, the serial gate, the hold.</li>
+    <li class="done"><b>Sign</b>, in the ceremony image, for K2: Nonce and Sign over the WebAuthn digest of a hash the
+      device works out. The signer gets it with milestone 3.</li>
+    <li class="done"><b>The address on the Cardputer</b>, checked against <code>vectors/webauthn.json</code>.</li>
+    <li class="done"><b>This site</b>: the ceremony image beside the signer's, with its SHA-256; the log, checked and
+      saved. Not yet: the rehearsal in the browser.</li>
     <li><b>A spare chip</b> through P1 to K4, written up in the build log.</li>
     <li><b>The first real key</b>: the fresh chip on my bench, serial <code>01233859…</code>.</li>
   </ol>

@@ -3,6 +3,7 @@
 // Cardputer over Web Serial. Both answer in the same lines (core/src/proto.rs), so one handler
 // reads both. Everything the page loads is in this folder or the repository's vectors/.
 import { canvas as blockie } from "./lib/blockies.js";
+import * as ceremony from "./lib/ceremony.js";
 import { load as loadEmu } from "./lib/emu.js";
 import * as passkey from "./lib/passkey.js";
 import { fields, safeTxHash, tamper as tampered, txLine } from "./lib/safe.js";
@@ -29,7 +30,8 @@ const st = {
   // what the signer has said about itself: { fw, chip: { model, serial, locks, counter }, pubkey, missing }
   dev: {},
   pending: null, // { name, claimed, device, pages, done, signed }
-  firmware: null, flashing: false,
+  firmware: null, fwPick: "signer", flashing: false,
+  cer: null, // the key ceremony's lines, read and checked (lib/ceremony.js), once its image talks
 };
 
 // ------------------------------------------------------------------ the log
@@ -659,6 +661,7 @@ function onLine(line) {
 
   let m;
   const d = st.dev;
+  if (!emuMode()) ceremonyLine(line);
   if ((m = line.match(/^cardputer-signer: (.+)$/)) || (m = line.match(/^= pong (cardputer-signer .+)$/))) {
     const what = m[1].replace(/^cardputer-signer /, "");
     d.fw = what === "emulator" ? "emulator (WebAssembly)" : what.replace(/^m(\d)$/, "milestone $1");
@@ -748,7 +751,7 @@ function updateButtons() {
   $("raw-send").disabled = !ready;
   $("connect").textContent = st.port ? "Disconnect" : "Connect over USB";
   $("connect").disabled = st.flashing;
-  $("flash-btn").disabled = !st.firmware || !$("fw-ok").checked || st.flashing || !("serial" in navigator);
+  $("flash-btn").disabled = !fwImage() || !$("fw-ok").checked || st.flashing || !("serial" in navigator);
 }
 
 async function openPort(port) {
@@ -816,15 +819,20 @@ async function send(line) {
     queueMicrotask(() => emuLines(st.emu.send(line)));
     return;
   }
-  if (!st.port?.writable) return;
-  const w = st.port.writable.getWriter();
-  try {
-    await w.write(new TextEncoder().encode(line + "\n"));
-    log("out", shown);
-    pulse("tx");
-  } finally {
-    w.releaseLock();
-  }
+  // one write at a time: a reply can come back, and ask for the next line, before a write is done
+  const write = async () => {
+    if (!st.port?.writable) return;
+    const w = st.port.writable.getWriter();
+    try {
+      await w.write(new TextEncoder().encode(line + "\n"));
+      log("out", shown);
+      pulse("tx");
+    } finally {
+      w.releaseLock();
+    }
+  };
+  st.writing = (st.writing || Promise.resolve()).catch(() => {}).then(write);
+  return st.writing;
 }
 
 async function connect() {
@@ -862,23 +870,109 @@ async function sendTx() {
   }, 4000);
 }
 
+// ------------------------------------------------------------------ the key ceremony
+/** A line from the Cardputer while the ceremony image runs: read and checked by lib/ceremony.js. */
+function ceremonyLine(line) {
+  if (line === "= pong diykey-ceremony") {
+    // it may have printed its first steps before this page was listening: ask for all of them again
+    st.cer = ceremony.reader();
+    st.dev.fw = "key ceremony";
+    renderCeremony();
+    send("log");
+    return;
+  }
+  if (line.startsWith("diykey-ceremony: ") && !st.cer) st.cer = ceremony.reader();
+  if (!st.cer) return;
+  st.cer.feed(line).then(renderCeremony);
+}
+
+const STEPS = { p1: "P1 Read the chip", p2: "P2 Write the rules", p3: "P3 Lock the rules", p4: "P4 Zeros and the record",
+  p5: "P5 Lock the data", p6: "P6 Check", k1: "K1 Make your key", k2: "K2 Test it", k3: "K3 Seal it", k4: "K4 Its address" };
+
+function renderCeremony() {
+  const c = st.cer;
+  const appears = c && $("cer").hidden;
+  $("cer").hidden = !c;
+  if (!c) return;
+  if (appears) $("cer").scrollIntoView({ block: "start", behavior: "smooth" });
+  const last = c.lines.filter((l) => /^(p\d|k\d): /.test(l)).at(-1);
+  const step = last ? last.slice(0, 2) : null;
+  $("cer-title").textContent = c.stop ? "Stopped" : step === "k4" ? "Done: a sealed key" : step ? `Last: ${STEPS[step]}` : "Connected to the ceremony image";
+  $("cer-title").className = c.stop ? "stop" : "";
+  $("cer-sub").textContent = c.stop ? c.stop + " Del on the Cardputer starts again from where the chip is."
+    : step === "k4" ? "Save the log. Then flash the signer back: The signer, under Flash a Cardputer below."
+    : step === "k2" ? "Seal the key on the Cardputer only if both test signatures are valid below."
+    : "Do each step on the Cardputer. This page checks what it prints, on its own.";
+
+  const dl = $("cer-vals");
+  dl.replaceChildren();
+  const row = (k, v) => { dl.append(el("dt", "", k), el("dd", "", v)); };
+  if (c.serial) row("Serial", c.serial.replace(/(.{4})/g, "$1 ").trim());
+  if (c.commit) row("Image built from", c.commit);
+  if (c.configCrc) row("Config CRC", `${c.configCrc} (this page: ${c.pageConfigCrc || "?"})`);
+  if (c.dataCrc) row("Data CRC", c.dataCrc);
+  if (c.pubkey) row("Public key", "0x" + c.pubkey);
+  if (c.address) row("Safe signer address", c.address);
+
+  const ul = $("cer-checks");
+  ul.replaceChildren();
+  for (const k of c.checks) {
+    const li = el("li", k.ok === true ? "yes" : k.ok === false ? "no" : "unk");
+    li.append(el("span", "step", k.step), document.createTextNode(k.what + " "), el("span", "why", k.detail ? `· ${k.detail}` : ""));
+    ul.append(li);
+  }
+}
+
+/** The log, as a text file: every line the ceremony printed, and what this page checked. Nothing
+ * in it is secret. */
+function saveCeremony() {
+  const c = st.cer;
+  if (!c) return;
+  const f = st.flashed;
+  const text = ["diykey key ceremony log", `saved ${new Date().toISOString()}`,
+    ...(f ? [`flashed from this page: ${f.file}, sha256 ${f.sha256}, built from ${f.commit}`] : []),
+    "", ...c.lines, "", "checked by the page:",
+    ...c.checks.map((k) => `${k.ok === true ? "ok  " : k.ok === false ? "FAIL" : "?   "} ${k.step} ${k.what}${k.detail ? ": " + k.detail : ""}`), ""].join("\n");
+  const a = el("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  a.download = `diykey-ceremony-${c.serial || "chip"}.txt`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 // ------------------------------------------------------------------ flashing
+/** The image picked to flash: the signer, or the key ceremony. */
+const fwImage = () => st.firmware && (st.firmware.images ? st.firmware.images[st.fwPick] : st.fwPick === "signer" ? st.firmware : null);
+
 async function loadFirmware() {
-  const dl = $("fw-info");
   try {
-    const info = await (await fetch("firmware/firmware.json", { cache: "no-store" })).json();
-    st.firmware = info;
-    dl.replaceChildren();
-    const row = (k, ...v) => { const dd = el("dd"); dd.append(...v); dl.append(el("dt", "", k), dd); };
-    row("Image", el("code", "", info.file), document.createTextNode(` · ${info.size.toLocaleString()} bytes at 0x0`));
-    const sha = el("code");
-    sha.append(document.createTextNode(info.sha256.slice(0, 56)), el("b", "", info.sha256.slice(56)));
-    row("SHA-256", sha);
-    row("Built from", el("code", "", info.commit), document.createTextNode(` · ${info.built}`),
-      ...(info.dirty ? [el("span", "warn", " · with uncommitted changes")] : []));
-    row("For", document.createTextNode(`${info.chip.toUpperCase().replace(/^ESP32/, "ESP32-")}, ${info.flashSize} flash (Cardputer v1.1)`));
+    st.firmware = await (await fetch("firmware/firmware.json", { cache: "no-store" })).json();
   } catch {
+    st.firmware = null;
+  }
+  renderFirmware();
+}
+
+function renderFirmware() {
+  const dl = $("fw-info"), info = st.firmware, img = fwImage();
+  for (const b of $("fw-pick").children) b.classList.toggle("on", b.dataset.img === st.fwPick);
+  $("flash-btn").textContent = st.fwPick === "ceremony" ? "Flash the key ceremony" : "Flash the signer";
+  if (!img) {
     dl.replaceChildren(el("dt", "", "Image"), el("dd", "warn", "Not built yet: run web/build.sh, then reload."));
+    updateButtons();
+    return;
+  }
+  dl.replaceChildren();
+  const row = (k, ...v) => { const dd = el("dd"); dd.append(...v); dl.append(el("dt", "", k), dd); };
+  row("Image", el("code", "", img.file), document.createTextNode(` · ${img.size.toLocaleString()} bytes at 0x0`));
+  const sha = el("code");
+  sha.append(document.createTextNode(img.sha256.slice(0, 56)), el("b", "", img.sha256.slice(56)));
+  row("SHA-256", sha);
+  row("Built from", el("code", "", info.commit), document.createTextNode(` · ${info.built}`),
+    ...(info.dirty ? [el("span", "warn", " · with uncommitted changes")] : []));
+  row("For", document.createTextNode(`${info.chip.toUpperCase().replace(/^ESP32/, "ESP32-")}, ${info.flashSize} flash (Cardputer v1.1)`));
+  if (st.fwPick === "ceremony") {
+    row("Does", el("span", "warn", "Writes the chip's rules, locks them, makes its key and seals it, a step at a time, each one on the Cardputer's own screen. The locks and the seal can't be undone."));
   }
   updateButtons();
 }
@@ -901,10 +995,12 @@ async function flash() {
   let transport;
   try {
     stage("Checking the image…", 0);
-    const data = new Uint8Array(await (await fetch(`firmware/${st.firmware.file}`, { cache: "no-store" })).arrayBuffer());
+    const img = fwImage();
+    const data = new Uint8Array(await (await fetch(`firmware/${img.file}`, { cache: "no-store" })).arrayBuffer());
     const got = await sha256hex(data);
-    if (got !== st.firmware.sha256) throw new Error(`the image's SHA-256 is ${got}, not the one in firmware.json`);
-    log("sys", `image ok: ${data.length} bytes, sha256 ${got}`);
+    if (got !== img.sha256) throw new Error(`the image's SHA-256 is ${got}, not the one in firmware.json`);
+    log("sys", `image ok: ${img.file}, ${data.length} bytes, sha256 ${got}`);
+    st.flashed = { file: img.file, sha256: got, commit: st.firmware.commit };
 
     const port = (await closePort()) || await navigator.serial.requestPort({ filters: [{ usbVendorId: ESPRESSIF }] });
     stage("Loading the flasher…");
@@ -925,8 +1021,10 @@ async function flash() {
     await loader.after("hard_reset");
     await transport.disconnect();
     transport = null;
-    stage("Done. The signer is on the board.", 1);
+    stage(`Done. ${img.file === "diykey-ceremony.bin" ? "The key ceremony" : "The signer"} is on the board.`, 1);
     st.flashing = false;
+    // the ceremony talks over USB: listen as the Cardputer, not the emulator
+    if (img.file === "diykey-ceremony.bin" && emuMode()) setMode("usb");
     try { await openPort(port); } catch { log("sys", "reconnect after flashing: press Connect"); connState("off", "Not connected"); }
   } catch (e) {
     stage(`Stopped: ${e.message}`);
@@ -1003,6 +1101,11 @@ async function main() {
     if (line) { await send(line); $("raw-line").value = ""; }
   });
   $("fw-ok").addEventListener("change", updateButtons);
+  $("fw-pick").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (b && !st.flashing) { st.fwPick = b.dataset.img; renderFirmware(); }
+  });
+  $("cer-save").addEventListener("click", saveCeremony);
   $("flash-btn").addEventListener("click", flash);
   document.addEventListener("keydown", (e) => {
     if (e.target.closest("input, textarea, summary")) return;

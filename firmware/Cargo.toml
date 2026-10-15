@@ -3,10 +3,17 @@ edition      = "2024"
 name         = "firmware"
 rust-version = "1.95"
 version      = "0.1.0"
+# `cargo run` flashes the signer; the ceremony is `cargo run --bin ceremony`
+default-run  = "firmware"
 
 [[bin]]
 name = "firmware"
 path = "./src/bin/main.rs"
+
+# The key ceremony (docs/CEREMONY.md): its own image, the only one that writes, locks or makes a key.
+[[bin]]
+name = "ceremony"
+path = "./src/bin/ceremony.rs"
 
 [dependencies]
 esp-hal = { version = "=1.2.2", features = ["esp32s3", "unstable"] }

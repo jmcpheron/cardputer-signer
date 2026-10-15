@@ -6,6 +6,7 @@ import { build } from "./lib/blockies.js";
 import { fields, hex, keccak256, safeTxHash, tamper, txLine } from "./lib/safe.js";
 import { b64url, candidates, keyFrom, parseAttestation, parseDer, safeSignature, verify } from "./lib/passkey.js";
 import { checksum, signerAddress } from "./lib/signer.js";
+import * as ceremony from "./lib/ceremony.js";
 
 const load = (n) => JSON.parse(readFileSync(new URL(`../vectors/${n}`, import.meta.url)));
 let failed = 0;
@@ -141,5 +142,32 @@ if (existsSync(wasm)) {
   emuNote = `emulator (${vectors.length} hashes, signing rules)`;
 }
 
-console.log(failed ? `${failed} failed` : `ok: keccak, ${vectors.length} Safe hashes, ${blockies.length} blockies, passkey signatures, ${wa.vectors.length} Safe signer addresses and encodings, ${emuNote}`);
+// The key ceremony: the page's checks of a rehearsal on a virtual chip (core/examples/ceremony.rs),
+// whose key is the p256 crate's. Every check passes; a byte changed anywhere fails one.
+const rehearsal = new URL("screens/ceremony-rehearsal.txt", import.meta.url);
+let ceremonyNote = "ceremony skipped (run web/build.sh)";
+check(ceremony.TABLE.length === 128 && hex(new Uint8Array(await crypto.subtle.digest("SHA-256", ceremony.TABLE))) ===
+  "36da855657a3ee7e098f27cd17b2a636c9e51adec02d252ee0adbe905b8113e1", "ceremony: the table's SHA-256");
+check(ceremony.crc16(Uint8Array.of(0x04, 0x11)) === 0x4333, "ceremony: CRC of the wake answer");
+if (existsSync(rehearsal)) {
+  const lines = readFileSync(rehearsal, "utf8").trim().split("\n");
+  const run = async (ls) => { const r = ceremony.reader(); for (const l of ls) await r.feed(l); return r; };
+  const r = await run(lines);
+  const what = r.checks.map((c) => `${c.step} ${c.what}`);
+  for (const w of ["P2 Config CRC", "P4 Data CRC", "P4 The record names this chip", "K1 The public key is a point on P-256",
+    "K2 Test signature 1", "K2 Test signature 2", "K2 Counter 0 went up by the two signatures", "K3 Test signature 3", "K4 The address"]) {
+    check(r.checks.some((c) => `${c.step} ${c.what}` === w && c.ok === true), `ceremony: ${w}`);
+  }
+  check(r.checks.every((c) => c.ok === true) && what.length === 9, "ceremony: nothing else, nothing failed");
+  // a changed byte: in a signature, in the factory config, in the record, in the key
+  const flip = (start, re, fix) => lines.map((l) => (l.startsWith(start) ? l.replace(re, fix) : l));
+  const bad = async (ls, w) => { const b = await run(ls); return b.checks.some((c) => `${c.step} ${c.what}` === w && c.ok === false); };
+  check(await bad(flip("k2: sig 1", / s 0x(.)/, (_, c) => ` s 0x${c === "0" ? "1" : "0"}`), "K2 Test signature 1"), "ceremony: a changed signature fails");
+  check(await bad(flip("p1: factory", /0x01/, "0x03"), "P2 Config CRC"), "ceremony: a changed factory config fails the config CRC");
+  check(await bad(flip("p4:", /data crc ..../, "data crc 0000"), "P4 Data CRC"), "ceremony: a wrong data CRC fails");
+  check(await bad(flip("k4: address", /0x(.)/, (_, c) => `0x${c === "1" ? "2" : "1"}`), "K4 The address"), "ceremony: a wrong address fails");
+  ceremonyNote = `the ceremony rehearsal (${r.checks.length} checks)`;
+}
+
+console.log(failed ? `${failed} failed` : `ok: keccak, ${vectors.length} Safe hashes, ${blockies.length} blockies, passkey signatures, ${wa.vectors.length} Safe signer addresses and encodings, ${emuNote}, ${ceremonyNote}`);
 process.exit(failed ? 1 : 0);

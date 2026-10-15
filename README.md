@@ -55,7 +55,8 @@ You need a Cardputer v1.1 (not the newer Cardputer-Adv, whose keyboard is wired 
 ATECC608 breakout, an AMS1117-3.3 regulator module and a Grove cable.
 The Grove port gives 5 V, and the ESP32-S3's pins take 3.3 V at most, so the chip runs from the
 regulator's 3.3 V. Parts, a shopping list, wiring and checks: [hardware/](hardware/README.md). How
-the chip will get its key: [the key ceremony](docs/CEREMONY.md), a plan.
+the chip gets its key: [the key ceremony](docs/CEREMONY.md), an image of its own that writes,
+locks and seals the chip, built and tested on a virtual chip but not yet run on a real one.
 
 ![Wiring: Grove 5 V through an AMS1117-3.3 to the ATECC608's VIN; G2 to SDA, G1 to SCL](hardware/wiring.svg)
 
@@ -88,6 +89,7 @@ Every crate is pinned exactly in `Cargo.toml`, and `Cargo.lock` pins each one by
 
 ```sh
 cd firmware && cargo run --release      # espflash flash --monitor --chip esp32s3
+cd firmware && cargo run --release --bin ceremony   # the key ceremony instead (docs/CEREMONY.md)
 ```
 
 ### Send it a transaction
@@ -114,7 +116,7 @@ The signer is either:
 - **the emulator**: `core` compiled to WebAssembly (`wasm/`), the same code as the firmware, with a
   passkey as its key. On the last page, Enter asks the passkey to sign the hash the emulator worked
   out, and the page checks the signature. It runs in any current browser, phones included.
-- **your Cardputer over USB** (Chrome or Edge, Web Serial). The page can flash the firmware too.
+- **your Cardputer over USB** (Chrome or Edge, Web Serial). The page can flash either image too: the signer, or the key ceremony, whose log it checks.
 
 To run it on your own computer:
 
@@ -152,10 +154,10 @@ Where the vectors come from: [vectors/SOURCE.md](vectors/SOURCE.md).
 
 | path | what |
 |---|---|
-| `core/` | everything that isn't hardware, `no_std` and no heap: the Safe hash, the ATECC608's packets (read commands only), blockies, the fonts, a framebuffer and the screens. It runs on the laptop. |
-| `firmware/` | the Cardputer: the panel (SPI), the chip (I2C), the keyboard, lines over USB. It draws with `core`. |
+| `core/` | everything that isn't hardware, `no_std` and no heap: the Safe hash, the ATECC608's packets (`atecc.rs`, read commands only), blockies, the fonts, a framebuffer and the screens; and the key ceremony's commands, steps and pages (`ceremony*.rs`), which only the ceremony image uses. It runs on the laptop, and its tests run the ceremony on a virtual chip. |
+| `firmware/` | the Cardputer: the panel (SPI), the chip (I2C), the keyboard, lines over USB (`src/lib.rs`). Two images: the signer (`src/bin/main.rs`) and the key ceremony (`src/bin/ceremony.rs`). They draw with `core`. |
 | `host/send.py` | sends a transaction from the computer and prints what the device says |
-| `web/` | the page at diykey.app: the emulator, the Cardputer over USB, and flashing; and the key ceremony's page |
+| `web/` | the page at diykey.app: the emulator, the Cardputer over USB, flashing either image, and checking the key ceremony's log; and the key ceremony's page |
 | `wasm/` | the emulator: `core` in WebAssembly, the firmware's states, a passkey as its key |
 | `vectors/` | test vectors from outside this code |
 | `fonts/` | Atkinson Hyperlegible Next and Mono as 4-bit bitmaps (SIL OFL 1.1, `fonts/OFL.txt`) |

@@ -3,7 +3,8 @@
 // Serves the repository on localhost, starts headless Chrome with a virtual WebAuthn authenticator
 // (the DevTools protocol's), and drives the page with real key presses: make a passkey, send a
 // transaction, page to the hash, sign, and check the signature verified; then a wrong claim, which
-// must not sign. Last, the key ceremony's page at a phone's width. Needs `web/build.sh` first, and Chrome (CHROME=/path/to/chrome if not found).
+// must not sign. Then the key ceremony from a pretend Cardputer over Web Serial, and last, the key
+// ceremony's page at a phone's width. Needs `web/build.sh` first, and Chrome (CHROME=/path/to/chrome if not found).
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { createServer } from "node:http";
@@ -135,6 +136,44 @@ try {
   check(!(await evaluate('document.getElementById("log").textContent.includes("= sign ")')), "a wrong claim: Enter on the red hash page doesn't sign");
   await press("Backspace", "Backspace");
   check(await evaluate('document.getElementById("log").textContent.includes("= rejected")'), "Del (Backspace) rejects it");
+  check(errors.length === 0, "no errors in the page" + (errors.length ? ": " + errors.join("; ") : ""));
+
+  // The key ceremony over USB, from a pretend Cardputer: a Web Serial port made in the page, which
+  // answers ping and log with the lines of the rehearsal on a virtual chip (core/examples/ceremony.rs).
+  // The page checks them as it checks a real chip's, and its panel shows each check passed.
+  const rehearsal = readFileSync(join(ROOT, "web/screens/ceremony-rehearsal.txt"), "utf8");
+  await page("Page.enable", {});
+  await page("Page.addScriptToEvaluateOnNewDocument", { source: `(() => {
+    const lines = ${JSON.stringify(rehearsal)};
+    let push, buf = "";
+    const readable = new ReadableStream({ start(c) { push = (t) => c.enqueue(new TextEncoder().encode(t)); } });
+    const writable = new WritableStream({ write(chunk) {
+      buf += new TextDecoder().decode(chunk);
+      for (let i; (i = buf.indexOf("\\n")) >= 0; buf = buf.slice(i + 1)) {
+        const l = buf.slice(0, i).trim();
+        if (l === "ping") push("= pong diykey-ceremony\\n");
+        if (l === "log") push("diykey-ceremony: commit " + "0".repeat(40) + "\\n" + lines + "= log end\\n");
+      }
+    } });
+    const port = { readable, writable, open: async () => {}, close: async () => {}, getInfo: () => ({ usbVendorId: 0x303a }) };
+    const serial = new EventTarget();
+    serial.requestPort = async () => port;
+    serial.getPorts = async () => [port];
+    Object.defineProperty(navigator, "serial", { value: serial });
+  })();` });
+  await page("Page.navigate", { url: (process.env.E2E_URL || `http://localhost:${port}/web/`) + "index.html#usb" });
+  await until('document.querySelectorAll("#txs li").length && document.body.classList.contains("is-emu") === false && !document.getElementById("connect").hidden', "USB mode");
+  await evaluate('document.getElementById("connect").click()');
+  await until('!document.getElementById("cer").hidden && document.querySelectorAll("#cer-checks li").length === 9', "the ceremony panel", 10000)
+    .catch(async (e) => { console.log(await evaluate('document.getElementById("log").textContent.slice(-1500)')); throw e; });
+  check(await evaluate('[...document.querySelectorAll("#cer-checks li")].every(li => li.classList.contains("yes"))'),
+    "the ceremony from a pretend Cardputer: " + await evaluate('[...document.querySelectorAll("#cer-checks li")].map(li => li.textContent.split(" · ")[0]).join(", ")'));
+  check(await evaluate('document.getElementById("cer-title").textContent === "Done: a sealed key"'), "the panel says the key is sealed");
+  if (await evaluate('fetch("firmware/firmware.json").then(r => r.ok)')) {
+    await evaluate('document.querySelector(\'#fw-pick [data-img="ceremony"]\').click()');
+    check(await evaluate('document.getElementById("fw-info").textContent.includes("diykey-ceremony.bin") && document.getElementById("flash-btn").textContent === "Flash the key ceremony"'),
+      "the key ceremony's image, picked to flash, with its SHA-256");
+  }
   check(errors.length === 0, "no errors in the page" + (errors.length ? ": " + errors.join("; ") : ""));
 
   // The key ceremony's page, on a phone: every picture loads under its CSP, and nothing scrolls sideways.

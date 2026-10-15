@@ -3,10 +3,13 @@
 How a fresh ATECC608 becomes a diykey key. The chip gets its rules and they are locked. Then the
 chip makes a key that nobody chose and nobody can read out, and the key is sealed.
 
-> **A plan, written 2026-10-14. No firmware runs it yet.** The signer holds read commands only
-> (`core/src/atecc.rs`). The steps did run on silicon, from the MicroPython signer this one was
-> ported from, on two ATECC608A chips ([what ran](#what-has-run-on-silicon)). Locks are permanent,
-> so the first time through is on a spare chip.
+> **Written 2026-10-14; the ceremony image built 2026-10-15, and not yet run on a chip.** It is its
+> own image (`firmware/src/bin/ceremony.rs`), flashed from [diykey.app](https://diykey.app/#flash)
+> beside the signer. The signer still holds read commands only (`core/src/atecc.rs`). The steps
+> ran on silicon from the MicroPython signer this one was ported from, on two ATECC608A chips
+> ([what ran](#what-has-run-on-silicon)); this Rust image has run them only on a virtual chip, in
+> `cargo test` ([how it's built](#how-its-built)). Locks are permanent, so the first time through is
+> on a spare chip.
 
 ## The short version
 
@@ -114,8 +117,9 @@ lock would seal slot 0 before it ever had a key.
 - USB power and a charged battery. Don't unplug on a red page.
 - A pen. Write each chip's serial on a sticker on its board, grouped as the screen shows it
   (`0123 4a7b 9c2d 5e6f ee`). Keep the chips you aren't using off the Grove port.
-- The ceremony image, flashed from the page or with `cargo`. It doesn't exist yet
-  ([what it would take](#what-it-would-take)).
+- The ceremony image, flashed from the page ("The key ceremony" on the flash card), or with
+  `cd firmware && cargo run --release --bin ceremony`. The page shows its SHA-256 and the commit it
+  was built from, and checks it before writing.
 
 ### The keys
 
@@ -130,8 +134,8 @@ lock would seal slot 0 before it ever had a key.
 |---|---|
 | <img src="screens/ceremony-p3.png" width="360" alt="P3 Lock the rules, a red page: two of the serial's last four typed"> | <img src="screens/ceremony-p3-hold.png" width="360" alt="P3 with all four typed and Enter held, the red bar filling"> |
 
-These pages are mockups, drawn by the signer's own drawing code and fonts
-(`cargo run --example ceremony`). Every page of the ceremony is on
+These pages are the ceremony image's own, drawn on a laptop by the same code from a rehearsal on a
+virtual chip (`cargo run --example ceremony`). Every page of the ceremony is on
 [diykey.app/ceremony.html](https://diykey.app/ceremony.html).
 
 ### Part 1: prepare the chip
@@ -150,13 +154,14 @@ These pages are mockups, drawn by the signer's own drawing code and fonts
 | Step | What it does | What it checks | Permanent? |
 |---|---|---|---|
 | K1 Make your key | GenKey, mode `0x04`, on slot 0. Always, whatever is there. Reads the public key and shows its fingerprint. | Slot 0 holds a valid key, and its public key reads back. GenKey on slot 1 is refused. | no: until K3, running K1 again makes a different key |
-| K2 Test it | Signs two test transactions, each the WebAuthn message over a Safe hash it works out from fixed fields: Base Sepolia, a Safe address nobody controls, so the signatures can't approve anything. Sends them over USB. | The page checks both with WebCrypto, as it checks a passkey's signatures. Counter 0 went up by exactly the signatures and key reads. Sign on slot 1 is refused. | no |
+| K2 Test it | Signs two test transactions, each the WebAuthn message over a Safe hash it works out from fixed fields: Base Sepolia, a Safe at address zero, which no Safe can be, so the signatures can't approve anything. Sends them over USB. | The page checks both with WebCrypto, as it checks a passkey's signatures. Counter 0 went up by exactly the signatures and key reads. Sign on slot 1 is refused. | no |
 | K3 Seal it | Lock, mode `0x82`: slot 0 alone. | SlotLocked reads `FE FF`. The public key is the one K2 tested. One more signature checks. | **yes** |
 | K4 Its address | Works out the Safe signer address from the public key, with its blockie. | The Cardputer's address and the page's match. | no |
 
 ### What to keep
 
-The page saves every line the ceremony prints, as a text file:
+The page checks what the ceremony prints as it goes, and saves every line as a text file ("Save the
+log"):
 - the serial, the revision and the factory config
 - the config CRC and the data CRC
 - the public key and the Safe signer address
@@ -242,7 +247,7 @@ authenticator:
 | its address | K4 | the key card |
 
 The ceremony itself could run in the page too: the same code, on a virtual chip. That is the
-rehearsal in [what it would take](#what-it-would-take).
+rehearsal in [what's left](#whats-left).
 
 ## A branded key
 
@@ -294,28 +299,49 @@ same table, and the signer reads both the same way.
   spare settles both.
 - **PrivWrite after the data lock** stays untested. Testing it needs the command, and the signer
   won't have one. The slot's rules and the datasheet are the evidence.
+- **What the Rust image assumes, from the datasheet and Microchip's library, not the bench:**
+  - SelfTest with mode `0x24` (ECDSA and SHA, cryptoauthlib's bits) answers 0 on a fresh chip. If
+    it doesn't, P1 refuses, and nothing is written.
+  - A 32-byte write to block 1 of a 36-byte slot writes its last 4 bytes. If it doesn't, P5's CRC
+    doesn't match, the chip refuses the lock, and nothing is locked.
+  - Info KeyValid on slot 0 says whether it holds a key. P6 only shows it: K1 makes a new key
+    either way.
+  - Each wake does at most about 0.6 s of commands, inside the chip's 1.3 s watchdog.
 
-## What it would take
+## How it's built
 
-In order. Each step that changes firmware changes the image's SHA-256.
+- **The commands** (Write, Lock, GenKey mode `0x04`, Nonce, Sign, Random, SelfTest, Info KeyValid)
+  and the steps P1 to K4 are in `core/src/ceremony.rs`. Only the ceremony image uses it: `web/build.sh`
+  stops if the signer's image holds any of its code. A test pins the table's SHA-256 at `36da8556…`
+  and each row against this file.
+- **The pages and keys** are in `core/src/ceremony_pages.rs`, and `firmware/src/bin/ceremony.rs`
+  feeds them the keys and the time. The step is always worked out from the chip, so a restart lands
+  where the chip is.
+- **The message K2 signs** is the passkey's ([PASSKEY.md](PASSKEY.md)), built on the device from its
+  own hash (`core/src/webauthn.rs`): `authenticatorData` for `diykey.app` with UP and UV, and
+  `clientDataJSON` with the hash as its challenge and `https://diykey.app` as its origin. Checked
+  against the four signatures in `vectors/webauthn.json`, which Safe's contract accepted.
+- **The address** is worked out on the Cardputer (`core/src/safe_signer.rs`), checked against
+  `vectors/webauthn.json`, and on the page.
+- **A virtual ATECC608** (`core/examples/common/vchip.rs`): a factory 4314 that refuses what the
+  silicon refused, with its 1.3 s watchdog. Its keys come from the p256 crate, a test-only
+  dependency. `cargo test` (`core/tests/ceremony.rs`) walks P1 to K4 through the same pages and
+  keys as the device: with a restart after every step, Del on every page, Enter let go early, a
+  wrong serial, the cable pulled in the middle of P4 and K2, a lock with a wrong CRC, a data lock
+  without the zeros, 4-byte writes into a secret slot, and GenKey and the locks after the seal.
+- **The page** reads the ceremony's lines (`web/lib/ceremony.js`) and works out on its own the
+  config CRC from the factory config, the data CRC from the record, the test hashes, each
+  signature (WebCrypto) and the address. `node web/test.mjs` checks it against the rehearsal's log,
+  and with a byte changed in it; `node web/e2e.mjs` runs it in Chrome against a pretend Cardputer
+  on Web Serial. The image keeps its log and prints it again when the page asks (`log`), so a page
+  that connects late still sees P1.
 
-1. **The write, lock and key commands**, in a new `core/src/ceremony.rs`. `atecc.rs` keeps read
-   commands only, and only the ceremony image uses the new file. A test pins the table's
-   fingerprint at `36da8556…`.
-2. **A virtual ATECC608 for the tests**: a factory 4314 that refuses what the silicon refused.
-   `cargo test` walks P1 to K4 with a restart after every step, and checks the refusals: a table
-   one byte off, a data lock without the zeros, Del at every step, GenKey on a sealed slot. It needs
-   P-256 code for its keys, which `core` doesn't have.
-3. **The ceremony image** (`firmware/src/bin/ceremony.rs`): the pages, the serial gate, the hold.
-4. **Sign**, with milestone 3. K2 and the signer use the same Nonce and Sign code.
-5. **The address on the Cardputer**: the CREATE2 address in `core`, checked against
-   `vectors/webauthn.json`.
-6. **The page**:
-   - the ceremony image beside the signer's, each with its SHA-256
-   - the log, and a way to save it
-   - flashing the signer back
-   - the rehearsal: the ceremony on the virtual chip, in the browser
-7. **A spare chip** through P1 to K4, written up in the [build log](BUILDLOG.md).
-8. **The first real key**: chip `01233859…`.
-9. **The shopping list**, checked against stock the week of the launch:
+## What's left
+
+1. **A spare chip** through P1 to K4, written up in the [build log](BUILDLOG.md).
+2. **The first real key**: chip `01233859…`.
+3. **Sign in the signer**, with milestone 3, from the same Nonce and Sign code.
+4. **The rehearsal in the browser**: the ceremony on the virtual chip, in the page. It needs P-256
+   code in the emulator, which only the tests have.
+5. **The shopping list**, checked against stock the week of the launch:
    [hardware/](../hardware/README.md#shopping-list).

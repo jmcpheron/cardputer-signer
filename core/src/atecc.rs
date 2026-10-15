@@ -18,7 +18,12 @@ pub const OP_GENKEY: u8 = 0x40;
 
 /// The chip's CRC-16 (poly 0x8005, bits taken low first), little-endian.
 pub fn crc16(data: &[u8]) -> [u8; 2] {
-    let mut crc: u16 = 0;
+    crc16_update(0, data).to_le_bytes()
+}
+
+/// The CRC-16 carried on over more data: for a zone too big to hold at once.
+pub fn crc16_update(crc: u16, data: &[u8]) -> u16 {
+    let mut crc = crc;
     for &b in data {
         for shift in 0..8 {
             let data_bit = (b >> shift) & 1;
@@ -29,7 +34,7 @@ pub fn crc16(data: &[u8]) -> [u8; 2] {
             }
         }
     }
-    crc.to_le_bytes()
+    crc
 }
 
 /// One command packet into `out`; returns its length (8 + data.len()).
@@ -116,6 +121,28 @@ pub const fn read_counter(idx: u16) -> Cmd {
 /// 0, and `public_key_is_mode_0` holds it there. Fails on an empty slot, or one whose PubInfo is clear.
 pub const fn public_key(slot: u16) -> Cmd {
     Cmd { opcode: OP_GENKEY, p1: 0x00, p2: slot, resp_len: 64, wait_ms: 120 }
+}
+
+/// The wire to the chip: the firmware's I2C, or a virtual chip in the tests.
+pub trait Link {
+    /// The wake token, and the chip's answer to it. The chip's watchdog then gives it 1.3 s.
+    fn wake(&mut self) -> Result<(), Error>;
+    /// To sleep: the chip forgets TempKey.
+    fn sleep(&mut self);
+    /// A command packet to the chip, then after `wait_ms` its answer into `resp` (count byte first).
+    fn exchange(&mut self, pkt: &[u8], wait_ms: u32, resp: &mut [u8]) -> Result<(), Error>;
+}
+
+/// One command, with `data` (at most 32 bytes), over `link`; its payload into `out`.
+pub fn run(link: &mut dyn Link, cmd: &Cmd, data: &[u8], out: &mut [u8]) -> Result<usize, Error> {
+    let mut pkt = [0u8; 8 + 32];
+    let n = packet(cmd.opcode, cmd.p1, cmd.p2, data, &mut pkt);
+    let len = cmd.resp_len + 3;
+    let mut resp = [0u8; 64 + 3];
+    link.exchange(&pkt[..n], cmd.wait_ms, &mut resp[..len])?;
+    let p = response(&resp[..len])?;
+    out[..p.len()].copy_from_slice(p);
+    Ok(p.len())
 }
 
 /// The 9-byte serial number out of config block 0.

@@ -670,7 +670,7 @@ function onLine(line) {
   }
   if ((m = line.match(/^chip: serial \[([0-9a-f, ]+)\] revision \[([0-9a-f, ]+)\] config locked (\w+) data locked (\w+) counter0 (\d+)/))) {
     const serial = m[1].replace(/[ ,]/g, ""), rev = m[2].replace(/[ ,]/g, "");
-    const model = rev.endsWith("6002") ? "ATECC608A" : rev.endsWith("6003") ? "ATECC608B" : "ATECC608";
+    const model = rev.endsWith("6002") ? "ATECC608A" : rev.endsWith("6003") ? "ATECC608B" : rev.endsWith("6005") ? "ATECC608C" : "ATECC608";
     d.chip = { model, serial, config: m[3] === "true" ? "locked" : "open", data: m[4] === "true" ? "locked" : "open", counter: m[5] };
     d.missing = false;
     d.pubkey = null;

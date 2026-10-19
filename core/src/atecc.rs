@@ -108,7 +108,7 @@ pub const fn read_config(block: u8) -> Cmd {
     Cmd { opcode: OP_READ, p1: 0x80, p2: (block as u16) << 3, resp_len: 32, wait_ms: 2 }
 }
 
-/// Info mode 0: the revision, 4 bytes. 00006002 is a 608A, 00006003 a 608B.
+/// Info mode 0: the revision, 4 bytes. 00006002 is a 608A, 00006003 a 608B, 00006005 a 608C.
 pub const REVISION: Cmd = Cmd { opcode: OP_INFO, p1: 0x00, p2: 0, resp_len: 4, wait_ms: 2 };
 
 /// Counter `idx` (0 or 1), read only (mode 0): 4 bytes, little-endian.

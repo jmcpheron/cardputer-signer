@@ -10,6 +10,11 @@ chip makes a key that nobody chose and nobody can read out, and the key is seale
 > ([what ran](#what-has-run-on-silicon)); this Rust image has run them only on a virtual chip, in
 > `cargo test` ([how it's built](#how-its-built)). Locks are permanent, so the first time through is
 > on a spare chip.
+>
+> **2026-10-16: the keys are [key-c boards](#the-key-key-c) now**, five of them, each an ATECC608C
+> behind a USB-C socket. A 608C hasn't been through any of this yet, and the image refuses one for
+> now. What key-c adds is a plan, not in the image yet: the red page for a revision not tried yet,
+> the key's name, the board and name in the record, and the serial read again before each change.
 
 ## The short version
 
@@ -37,6 +42,31 @@ flowchart LR
   P6 --> K1
   K4 --> S[a testnet Safe:<br/>add it as an owner]
 ```
+
+## The key: key-c
+
+key-c is a 16 × 36 mm board I designed for the key: an ATECC608C (SOIC-8) behind a USB-C socket.
+JLCPCB made and assembled five in 2026-10. The socket is only wires, not USB:
+- D+ is SDA, D− is SCL, and VBUS powers the chip. Both rows of the socket are wired, so the plug
+  goes in either way up.
+- A 5.1 kΩ resistor on each CC pin, and an ESD array between the socket and the chip.
+- No pull-ups on SDA and SCL. The Cardputer's end has them.
+- Four test pads on the back.
+
+How it goes on the Cardputer, and the meter checks before the first plug-in:
+[hardware/](../hardware/README.md#key-c-the-key-on-a-usb-c-board).
+
+What it changes for the ceremony:
+- **A 608C.** Microchip says the 608C has the 608B's config zone, slots and commands, and the 608B
+  the 608A's. No new config bits. Command times differ a little, and the driver polls for every
+  answer, so a slower command just takes one more poll. Info says `00006005` (Microchip's note; P1
+  reads it on every chip). This table has run on 608As only, so the first key-c is the rehearsal.
+- **It unplugs.** The ceremony and the signer can't see it go: the Grove port has no pin to spare
+  for CC. So both read the serial again before anything that changes the chip
+  ([decision 10](#the-decisions)).
+- **Five boards.** A rehearsal, two keys, a replacement and a blank spare ([the bench](#the-chips-on-my-bench)).
+- **The key alone can sign** ([decision 11](#the-decisions)). A key in a pocket is easier to lose
+  than a chip wired to a Cardputer.
 
 ## What you trust, and what you don't
 
@@ -82,6 +112,23 @@ anyone with the cable could flash a signer that shows one thing and signs anothe
 9. **The test signatures are the signer's own kind.** K2 signs the WebAuthn message over the Safe
    hash of a fixed test transaction, worked out on the device. It never signs a digest from the
    computer.
+10. **The serial again, right before every write, lock, GenKey and Sign.** The ceremony wakes the
+    chip, reads config block 0 and compares the serial with the one on the screen. A config read
+    doesn't count as a use. A different serial, or no answer, stops the step with nothing written,
+    and the ceremony starts again from the chip's state (decision 8). The signer does the same
+    before every Sign: a key swapped during a review ends the review. Planned: the image doesn't do
+    this yet.
+11. **The key alone can sign.** The chip signs any digest it is sent. "Only the hash it worked out"
+    is the Cardputer's rule, not the chip's. Whoever holds a key-c and any microcontroller can make
+    it sign. So:
+    - the Safe's threshold is the protection, as in decision 4
+    - a lost key is swapped out of the Safe at once, not waited for
+    - counter 0 is the tell: write it on the key's sticker ([what to keep](#what-to-keep)). A key
+      that comes back with a higher number was used.
+
+    Considered and not chosen: making slot 0 need an authorization key that only its Cardputer
+    holds. The Cardputer's flash isn't encrypted, so anyone with its cable could read that key. And
+    it is a new table on a permanent step (decision 2).
 
 ## The rules: diykey v1
 
@@ -112,11 +159,13 @@ lock would seal slot 0 before it ever had a key.
 
 ### Before you start
 
-- The Cardputer, with the chip wired and checked as in [hardware/](../hardware/README.md).
+- The Cardputer, with the chip wired and checked as in [hardware/](../hardware/README.md). For a
+  key-c, the board metered first ([hardware/](../hardware/README.md#key-c-the-key-on-a-usb-c-board)).
 - **A spare chip the first time.** A breakout costs about $5. Take the spare all the way through K4.
-- USB power and a charged battery. Don't unplug on a red page.
+- USB power and a charged battery. Don't unplug on a red page, and don't pull the key out.
 - A pen. Write each chip's serial on a sticker on its board, grouped as the screen shows it
-  (`0123 4a7b 9c2d 5e6f ee`). Keep the chips you aren't using off the Grove port.
+  (`0123 4a7b 9c2d 5e6f ee`). On a key-c it goes on the back, clear of the test pads, or on its
+  case. Keep the chips you aren't using off the Grove port.
 - The ceremony image, flashed from the page ("The key ceremony" on the flash card), or with
   `cd firmware && cargo run --release --bin ceremony`. The page shows its SHA-256 and the commit it
   was built from, and checks it before writing.
@@ -142,10 +191,10 @@ virtual chip (`cargo run --example ceremony`). Every page of the ceremony is on
 
 | Step | What it does | What it checks | Permanent? |
 |---|---|---|---|
-| P1 Read the chip | Reads everything. The page saves the factory config to the log. | It answers at 0x60; revision `00006002` (a 608A); both zones open (`55 55`); SlotLocked `FF FF`; Random gives the fixed pattern of an unlocked chip; SelfTest passes. It refuses anything else and says why: a used chip, a TrustFLEX or Trust&GO part (they come locked), an unknown revision. | no |
+| P1 Read the chip | Reads everything. The page saves the factory config to the log. | It answers at 0x60; both zones open (`55 55`); SlotLocked `FF FF`; Random gives the fixed pattern of an unlocked chip; SelfTest passes. The revision: `00006002` (a 608A) goes on. A revision no chip has taken through K4 yet (`00006003`, a 608B, and `00006005`, a 608C) is refused for now; the plan is [a red page](#a-revision-not-tried-yet) first. It refuses anything else and says why: a used chip, a TrustFLEX or Trust&GO part (they come locked), an unknown revision. | no |
 | P2 Write the rules | Writes the table into the config zone, except the chip's own bytes (0–15 and 84–87). Reads it back. | The readback is the table. The screen shows the config CRC. The page works the CRC out on its own from P1's saved bytes, and the two should match. | no: it can be written again |
 | P3 Lock the rules | Lock, mode `0x00`, with that CRC. | If one byte differs, the chip refuses and locks nothing. Afterwards: config locked, the table unchanged, Random live. | **yes** |
-| P4 Zeros and the record | Zeros into slots 1–15, in 32-byte writes: before the data lock, the chip refuses 4-byte writes into secret slots. [The record](#the-record) into OTP. The screen shows the data CRC. | Each write is accepted. P5's CRC checks what they wrote. | no, until P5 |
+| P4 Zeros and the record | Asks for [the key's name](#its-name) (planned). Zeros into slots 1–15, in 32-byte writes: before the data lock, the chip refuses 4-byte writes into secret slots. [The record](#the-record) into OTP. The screen shows the data CRC. | Each write is accepted. P5's CRC checks what they wrote. | no, until P5 |
 | P5 Lock the data | Lock, mode `0x01`, with the CRC of every slot that isn't a key (1–15, in order), then OTP. | If one byte differs, the chip refuses and locks nothing. Afterwards: data locked, OTP and slot 8 read in the clear, slot 1 can't be read. | **yes** |
 | P6 Check | Reads it all back. | Both zones locked; the table; the record; slot 0 empty, checked with Info, which doesn't count as a use; counter 0. | no |
 
@@ -158,6 +207,31 @@ virtual chip (`cargo run --example ceremony`). Every page of the ceremony is on
 | K3 Seal it | Lock, mode `0x82`: slot 0 alone. | SlotLocked reads `FE FF`. The public key is the one K2 tested. One more signature checks. | **yes** |
 | K4 Its address | Works out the Safe signer address from the public key, with its blockie. | The Cardputer's address and the page's match. | no |
 
+### A revision not tried yet
+
+Planned: the image refuses these at P1 for now, and the page below is a mockup.
+
+A 608B or a 608C, until one of its kind has been through P1 to K4 and into the build log. P1 shows
+a red page before P2:
+
+> **Not tried on a 608C yet.** Its rules should be a 608A's. Go on only with a spare you can lose.
+
+The serial gate and the 3-second hold, as on any red page. Nothing is written on this page, but
+it is where a mistake would start. Once a spare of that revision has been through, its revision
+moves into the plain list in the next ceremony image.
+
+### Its name
+
+Planned: the image doesn't ask yet, and writes zeros where the name goes.
+
+At P4 the Cardputer asks for a name for the key, up to 16 characters: letters, digits, spaces and
+`-`. It goes into [the record](#the-record) and is frozen at P5. The signer's idle screen shows it
+beside the serial, so with five keys on the desk, you know which one is in.
+- Del leaves it empty. An empty name is fine.
+- Anyone holding the key can read it, so a colour or a number is better than whose it is or where
+  it lives: `key 2 blue`, not `office drawer`.
+- A name can't be changed after P5. A sticker can.
+
 ### What to keep
 
 The page checks what the ceremony prints as it goes, and saves every line as a text file ("Save the
@@ -169,6 +243,10 @@ log"):
 - the ceremony image's commit and SHA-256
 
 Nothing in it is secret. Publish it if you like.
+
+And on the key's sticker, under the serial: **counter 0**, as K4 leaves it. Write the new number
+each time you sign with it. The idle screen shows counter 0, so a key that comes back reading more
+than its sticker was used without you ([decision 11](#the-decisions)).
 
 ### Afterwards
 
@@ -198,7 +276,9 @@ Nothing in it is secret. Publish it if you like.
 | 23 | 1 | who prepared it: 0 its owner, 1 a diykey bench (a branded key) |
 | 24 | 3 | the number on its label, if branded; else 0 |
 | 27 | 16 | the brand key's id, SHA-256(x ‖ y) first 16 bytes, if branded; else zeros |
-| 43 | 21 | zeros |
+| 43 | 1 | the board: 0 a breakout, 1 a key-c P2 (planned; the image writes 0) |
+| 44 | 16 | [its name](#its-name), ASCII, zeros after it; all zeros if none (planned; the image writes zeros) |
+| 60 | 4 | zeros |
 
 The record holds no key, because there is no key yet when it is frozen. It only says how the chip
 was prepared. The signer always reads the live key.
@@ -207,9 +287,29 @@ was prepared. The signer always reads the live key.
 
 | chip | what it is | what it gets |
 |---|---|---|
-| `0123f3acfd2a826bee` | 608A. Its config was locked on 2026-09-17 with Microchip's test table, and the key in slot 0 is sealed. Data zone open. | Nothing. P1 refuses it. It stays the development chip, signer address `0x2843…5E53`. |
-| `01233859…` | Both zones open, no key (read 2026-10-14). | The first diykey key, after the spare. P1 reads its revision first. |
-| a spare breakout | factory | The rehearsal, P1 to K4. Afterwards it is a working testnet key. |
+| `0123f3acfd2a826bee` | 608A breakout. Its config was locked on 2026-09-17 with Microchip's test table, and the key in slot 0 is sealed. Data zone open. | Nothing. P1 refuses it. It stays the development chip, signer address `0x2843…5E53`. |
+| `01233859…` | A breakout, its revision not checked yet. Both zones open, no key (read 2026-10-14). | Kept blank for now. Later, the Rust ceremony on it, so a breakout has run it too. |
+| key-c 1 | 608C, from JLCPCB. Not read yet. | **The rehearsal**, P1 to K4, through [the red page](#a-revision-not-tried-yet). Afterwards a working testnet key, and the 608C goes into the plain list. |
+| key-c 2, 3 | the same | **The keys.** Owners of a testnet Safe, 2 of 3, with a passkey as the third. |
+| key-c 4 | the same | **The replacement**, for [the lost-key drill](#the-lost-key-drill). |
+| key-c 5 | the same | **Kept blank**: the spare for the next ceremony image or the next table. |
+
+Every key-c gets the meter checks and a plain read on the signer first: its serial, revision
+`00006005`, both zones open. Only the board being worked on is in the socket.
+
+## The lost-key drill
+
+Decision 6 says a lost key is swapped out by the Safe's other owners. The drill shows that it works,
+on testnet, before any key matters:
+1. The Safe: key-c 2, key-c 3 and a passkey, threshold 2.
+2. Say key-c 3 is lost. Put it in a drawer.
+3. Key-c 2 and the passkey sign `swapOwner`, from key-c 3's address to key-c 4's. The signer shows
+   it as an owner change, in red.
+4. Check: the Safe lists key-c 4, and a transaction signed by key-c 3 and key-c 2 is refused.
+5. Key-c 3's counter 0 reads what its sticker says: it wasn't used while it was "lost".
+
+Into the build log, with the transaction hashes. It needs Sign (milestone 3), and a way to send the
+signatures to the Safe, which the page doesn't have yet.
 
 ## What has run on silicon
 
@@ -231,7 +331,7 @@ The MicroPython signer ran these steps on a Raspberry Pi Pico 2 W, with Adafruit
   - a WebAuthn signature from it passed Safe's `isValidSignatureForSigner` on Base Sepolia, and a
     wrong hash didn't
 
-Not run: anything on a 608B, and anything from this Rust firmware or a Cardputer.
+Not run: anything on a 608B or a 608C, and anything from this Rust firmware or a Cardputer.
 
 ## In the emulator
 
@@ -286,17 +386,22 @@ chips out. Each owner then runs Part 2 on their own Cardputer.
 
 **For the launch, no brand.** People who build one buy their own breakout, and the one to trust
 for Part 1 is themselves. A brand is worth it when the project hands out chips, as kits or at a
-meetup. Every chip gets slot 8 readable from the start, so a branded chip and your own run the
-same table, and the signer reads both the same way.
+meetup. key-c makes that cheaper: the boards come assembled, five or more at a time, and the label
+goes on the board. Every chip gets slot 8 readable from the start, so a branded chip and your own
+run the same table, and the signer reads both the same way.
 
 ## What only silicon can settle
 
 - **A 608B.** This table and both locks have run on 608A chips only. Adafruit's page doesn't say
   which part the 4314 carries now. P1 refuses revision `00006003` until a spare 608B has been
-  through P1 to K4.
+  through P1 to K4, and then the plan is a red page.
 - **The Cardputer.** Everything above ran from MicroPython on a Pico. New here: the Rust driver's
   waits for GenKey, Sign and Lock, and the chip's power through the AMS1117 while it runs them. The
   spare settles both.
+- **A 608C.** Microchip's notes say it takes the same table, with slightly different command
+  times. Key-c 1 settles it. Its Info revision is expected to be `00006005`.
+- **key-c on the Cardputer.** No pull-ups on the board, the 2.2 kΩ ones at the plug instead, and the
+  plug's wires to the Grove port. The plain reads before the ceremony settle these.
 - **PrivWrite after the data lock** stays untested. Testing it needs the command, and the signer
   won't have one. The slot's rules and the datasheet are the evidence.
 - **What the Rust image assumes, from the datasheet and Microchip's library, not the bench:**
@@ -338,10 +443,14 @@ same table, and the signer reads both the same way.
 
 ## What's left
 
-1. **A spare chip** through P1 to K4, written up in the [build log](BUILDLOG.md).
-2. **The first real key**: chip `01233859…`.
-3. **Sign in the signer**, with milestone 3, from the same Nonce and Sign code.
-4. **The rehearsal in the browser**: the ceremony on the virtual chip, in the page. It needs P-256
+1. **key-c in the ceremony image**: the red page for a revision not tried yet, in place of P1's
+   refusal; the serial read again before each change ([decision 10](#the-decisions)); the name;
+   the board and the name in [the record](#the-record).
+2. **key-c 1** through P1 to K4, written up in the [build log](BUILDLOG.md).
+3. **The first real keys**: key-c 2 and 3. Then the [drill](#the-lost-key-drill), with key-c 4.
+4. **Sign in the signer**, with milestone 3, from the same Nonce and Sign code, and the same
+   serial check before it.
+5. **The rehearsal in the browser**: the ceremony on the virtual chip, in the page. It needs P-256
    code in the emulator, which only the tests have.
-5. **The shopping list**, checked against stock the week of the launch:
+6. **The shopping list**, checked against stock the week of the launch:
    [hardware/](../hardware/README.md#shopping-list).

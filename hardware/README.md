@@ -38,8 +38,9 @@ For one signer, checked 2026-10-14. Stock changes, so check again the week you o
 - **The chip must be blank**, with both zones open, as Adafruit's 4314 boards have come so far.
   Microchip's TrustFLEX and Trust&GO parts (ATECC608B-TFLXTLS, ATECC608B-TNGTLS) come locked with
   Microchip's own rules, and the ceremony refuses them.
-- **608A or 608B.** Adafruit's page doesn't say which part the 4314 carries. The idle screen shows
-  the revision: `00006002` is a 608A, `00006003` a 608B. The ceremony has run on 608As only.
+- **608A, 608B or 608C.** Adafruit's page doesn't say which part the 4314 carries. The idle screen
+  names it from its revision: `00006002` is a 608A, `00006003` a 608B, `00006005` a 608C. The
+  ceremony has run on 608As only.
 
 ## Why a regulator
 
@@ -76,6 +77,65 @@ Your regulator module's pins may be labelled VIN/IN, GND and VOUT/OUT.
 
 The chip has power whenever the Cardputer is on. The Grove port has only two signal pins, so the
 firmware can't switch the chip's power. It finds the chip by asking for it at 0x60.
+
+## key-c: the key on a USB-C board
+
+key-c is a 16 × 36 mm board with an ATECC608C behind a USB-C socket, in place of the breakout. I had
+five made and assembled at JLCPCB in 2026-10; the design files aren't in this repository. The socket
+is only wires, not USB:
+
+| key-c's socket | is |
+|---|---|
+| VBUS | the chip's power |
+| D+ | SDA |
+| D− | SCL |
+| CC1, CC2 | 5.1 kΩ to GND each |
+| GND | GND |
+
+Both rows of the socket are wired, so the plug goes in either way up. An ESD array sits between the
+socket and the chip. **The board has no pull-ups on SDA and SCL.** Adafruit's breakout has them;
+here they go at the Cardputer's end.
+
+### Its end on the Cardputer
+
+A USB-C **plug** breakout (a male plug on a small board, with VBUS, D+, D−, CC and GND brought out)
+and two 2.2 kΩ resistors, on the same AMS1117 as before:
+
+| from | to |
+|---|---|
+| Grove 5 V | regulator IN |
+| Grove GND | regulator GND, and the plug's GND |
+| regulator OUT (3.3 V) | the plug's VBUS, and a 2.2 kΩ to each of SDA and SCL |
+| Grove G2 | the plug's D+ (SDA) |
+| Grove G1 | the plug's D− (SCL) |
+| the plug's CC | not connected: the Grove port has no pin to spare |
+
+- **A plug, not a socket and a cable.** With a socket on the Cardputer's end, someone will plug a
+  phone or a charger into it, and a charger puts 5 V on VBUS. That would reach the 3.3 V line, and
+  G1 and G2 through the pull-ups. A plug only takes a key. If you do use a cable, keep it short
+  (30 cm or less): a cable's capacitance slows the I2C edges.
+- **Nothing on the Cardputer sees the key come and go.** The firmware finds it by asking at 0x60,
+  as with the breakout. The ceremony and the signer read its serial again before anything that
+  changes the chip or signs ([the ceremony](../docs/CEREMONY.md#the-decisions), decision 10).
+- **Don't put a key into a computer, phone or charger.** A port that sees its CC resistors gives it
+  5 V. The ATECC608 runs on 2.0 to 5.5 V, so that shouldn't harm it, but nothing there talks to
+  it. It's a key on wires, not a USB device.
+
+### Checks, before a key's first plug-in
+
+On each board, unpowered, with a loupe and a meter:
+1. Look it over. Sand the edges lightly: they weren't deburred.
+2. VBUS to GND (at the socket, or the test pads on the back): not a short.
+3. Each CC pin to GND: 5.1 kΩ.
+4. SDA and SCL: not shorted to each other, to GND or to VBUS.
+
+On the Cardputer's end, powered, with no key in:
+1. The plug's VBUS to GND: about 3.3 V.
+2. D+ and D− to GND: about 3.3 V each, through the pull-ups.
+
+Then, with the Cardputer off, plug a key in. Turn it on: the idle screen should name an ATECC608C,
+its serial, and counter 0. If it says "No chip", turn it off and check the wiring; Enter reads the
+chip again. Only one key at a time; there is only one plug.
 
 ## About the chip
 

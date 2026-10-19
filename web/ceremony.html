@@ -41,6 +41,9 @@
     virtual chip (<code>core/examples/ceremony.rs</code>). The steps ran on silicon from the MicroPython
     signer this one was ported from, on two ATECC608A chips (<a href="#silicon">what ran</a>); this
     firmware hasn't run them yet. Run a spare chip first.</p>
+  <p class="plan-note"><b>The keys are now <a href="#keyc">key-c boards</a></b>, each an ATECC608C behind a
+    USB-C socket. The image refuses a 608C for now: its red page for a revision not tried yet, the key's
+    name and the serial read again before each change are a plan, and their screens are mockups.</p>
 
   <ol class="life" aria-label="The chip through the ceremony">
     <li><svg class="chip st-factory" viewBox="0 0 132 150" role="img" aria-label="A factory chip: nothing locked, every slot unknown"><rect class="pin" x="3" y="26" width="10" height="6" rx="1"/><rect class="pin" x="119" y="26" width="10" height="6" rx="1"/><rect class="pin" x="3" y="45" width="10" height="6" rx="1"/><rect class="pin" x="119" y="45" width="10" height="6" rx="1"/><rect class="pin" x="3" y="64" width="10" height="6" rx="1"/><rect class="pin" x="119" y="64" width="10" height="6" rx="1"/><rect class="pin" x="3" y="83" width="10" height="6" rx="1"/><rect class="pin" x="119" y="83" width="10" height="6" rx="1"/><rect class="pin" x="3" y="102" width="10" height="6" rx="1"/><rect class="pin" x="119" y="102" width="10" height="6" rx="1"/><rect class="pin" x="3" y="121" width="10" height="6" rx="1"/><rect class="pin" x="119" y="121" width="10" height="6" rx="1"/><rect class="pkg" x="12" y="8" width="108" height="136" rx="10"/><text class="pkg-t" x="66" y="23">ATECC608</text><rect class="z cfg" x="22" y="31" width="88" height="18" rx="4"/><text class="z-t" x="28" y="44">rules</text><g class="lock cfg-lock"><path class="sh sh-open" d="M96.5 37.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 41.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="41" width="10" height="7" rx="1.5"/></g><rect class="t s0" x="22" y="56" width="19" height="13" rx="2"/><rect class="t d" x="45" y="56" width="19" height="13" rx="2"/><rect class="t d" x="68" y="56" width="19" height="13" rx="2"/><rect class="t d" x="91" y="56" width="19" height="13" rx="2"/><rect class="t d" x="22" y="73" width="19" height="13" rx="2"/><rect class="t d" x="45" y="73" width="19" height="13" rx="2"/><rect class="t d" x="68" y="73" width="19" height="13" rx="2"/><rect class="t d" x="91" y="73" width="19" height="13" rx="2"/><rect class="t s8" x="22" y="90" width="19" height="13" rx="2"/><rect class="t d" x="45" y="90" width="19" height="13" rx="2"/><rect class="t d" x="68" y="90" width="19" height="13" rx="2"/><rect class="t d" x="91" y="90" width="19" height="13" rx="2"/><rect class="t d" x="22" y="107" width="19" height="13" rx="2"/><rect class="t d" x="45" y="107" width="19" height="13" rx="2"/><rect class="t d" x="68" y="107" width="19" height="13" rx="2"/><rect class="t d" x="91" y="107" width="19" height="13" rx="2"/><text class="t-n n0" x="31.5" y="66">0</text><text class="t-n n8" x="31.5" y="100">8</text><rect class="z otp" x="22" y="126" width="66" height="12" rx="3"/><text class="z-t otp-t" x="28" y="135">OTP</text><text class="z-t rec" x="56" y="135">DK</text><g class="lock data-lock"><path class="sh sh-open" d="M96.5 128.5v-2a3 3 0 0 1 6 0v6"/><path class="sh sh-shut" d="M96.5 132.5v-3a3 3 0 0 1 6 0v3"/><rect class="lk" x="94.5" y="132" width="10" height="7" rx="1.5"/></g></svg><b>Factory</b><small>Nothing locked. Its rules are Microchip's.</small></li>
@@ -101,6 +104,58 @@
     that shows one thing and signs another.</p>
 </section>
 
+<section class="cer-sec" id="keyc">
+  <h2>The key: key-c</h2>
+  <p class="sec-sub">A 16 × 36 mm board: an ATECC608C behind a USB-C socket, used as wires, not USB. D+ is SDA,
+    D− is SCL, VBUS powers the chip. Five were made at JLCPCB in 2026-10. How it goes on the Cardputer:
+    <a href="https://github.com/jmcpheron/diykey/blob/main/hardware/README.md#key-c-the-key-on-a-usb-c-board">hardware/</a>.</p>
+  <div class="cards">
+    <div class="card">
+      <h4>A 608C</h4>
+      <p>Microchip says it has the 608B's config zone, slots and commands, and the 608B the 608A's, with
+        slightly different command times. This table has run on 608As only, so the first key-c is the
+        rehearsal, through <a href="#part1">P1's red page</a>.</p>
+    </div>
+    <div class="card">
+      <h4>It unplugs</h4>
+      <p>The Cardputer can't see it go: the Grove port has no pin for CC. So the ceremony reads the serial
+        again right before every write, lock and GenKey, and the signer before every Sign. A different serial
+        stops the step, with nothing written.</p>
+    </div>
+    <div class="card trust no">
+      <span class="who">Know this</span>
+      <h4>The key alone can sign</h4>
+      <p>The chip signs any digest it's sent. "Only its own hash" is the Cardputer's rule. Whoever holds a key
+        and a microcontroller can make it sign. The Safe's threshold is the protection, and a lost key is
+        swapped out at once.</p>
+    </div>
+    <div class="card">
+      <h4>The counter on its sticker</h4>
+      <p>Counter 0 goes up with every signature and never down. The idle screen shows it. Write it on the
+        key's sticker after the ceremony and after each use: a key that comes back reading more was used
+        without you.</p>
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead><tr><th>Board</th><th>What it gets</th></tr></thead>
+      <tbody>
+        <tr><td>key-c 1</td><td><b>The rehearsal</b>, P1 to K4. Afterwards a working testnet key, and the 608C goes into the plain list.</td></tr>
+        <tr><td>key-c 2, 3</td><td><b>The keys.</b> Owners of a testnet Safe, 2 of 3, with a passkey as the third.</td></tr>
+        <tr><td>key-c 4</td><td><b>The replacement</b>, for the lost-key drill.</td></tr>
+        <tr><td>key-c 5</td><td><b>Kept blank</b>, the spare for the next ceremony image or table.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card" id="drill">
+    <h4>The lost-key drill</h4>
+    <p>No backup means the Safe's other owners swap a lost key out. The drill shows it works before any key
+      matters: say key-c 3 is lost and put it in a drawer. Key-c 2 and the passkey sign <code>swapOwner</code>,
+      key-c 3 for key-c 4. Then a transaction signed by key-c 3 is refused, and key-c 3's counter still reads
+      what its sticker says. It needs Sign (milestone 3), and a way to send signatures to the Safe.</p>
+  </div>
+</section>
+
 <section class="cer-sec" id="part1">
   <div class="part-head">
     <span class="part-n">Part 1</span>
@@ -111,6 +166,7 @@
   <article class="step">
     <div class="screens">
       <figure class="screen"><img src="screens/ceremony-p1.png" width="720" height="405" alt="P1 Read the chip: ATECC608A, serial 0123 4a7b 9c2d 5e6f ee. Both zones open, nothing locked yet. Self-test passed. The factory config, sent to the log. Del Back, Enter Write the rules."></figure>
+      <figure class="screen small"><img src="screens/ceremony-p1-new.png" width="720" height="405" alt="P1 Not tried yet, in red, Spare only: Not tried on a 608C yet. Its rules should be a 608A's. Go on only with a spare you can lose. The serial's last four typed, Enter held."><figcaption>A mockup: a revision no chip has taken through K4 would get a red page first. The image refuses it for now.</figcaption></figure>
       <figure class="screen small"><img src="screens/ceremony-p1-refused.png" width="720" height="405" alt="P1 refusing a chip: Can't prepare this chip, 0123 f3ac fd2a 826b ee. Its rules were locked before, and they aren't these. Nothing was written. Use a fresh chip."><figcaption>A used chip is refused, with nothing written. This is the first chip on my bench.</figcaption></figure>
     </div>
     <div class="step-text">
@@ -118,7 +174,8 @@
       <h3 class="step-title">Read the chip</h3>
       <p>Reads everything. The page saves the factory config to the log.</p>
       <dl>
-        <dt>Checks</dt><dd>It answers at 0x60. Revision <code>00006002</code>, a 608A. Both zones open
+        <dt>Checks</dt><dd>It answers at 0x60. Revision <code>00006002</code>, a 608A; <code>00006003</code> (a
+          608B) and <code>00006005</code> (a 608C) are refused for now; the plan is a red page first. Both zones open
           (<code>55 55</code>), slot locks <code>FF FF</code>. Random gives the fixed pattern of an unlocked
           chip. SelfTest passes.</dd>
         <dt>Refuses</dt><dd>A used chip, a TrustFLEX or Trust&amp;GO part (they come locked), an unknown
@@ -161,15 +218,18 @@
 
   <article class="step">
     <div class="screens">
+      <figure class="screen small"><img src="screens/ceremony-p4-name.png" width="720" height="405" alt="P4 Its name: A name for this key, key 2 blue typed in a box, 10 of 16. Shown beside its serial. Anyone holding the key can read it. Frozen at P5. Del No name, Enter Next."></figure>
       <figure class="screen"><img src="screens/ceremony-p4.png" width="720" height="405" alt="P4 Zeros and the record: slots 1 to 15 zeros; the record, into OTP. Data CRC 0c3a. Rewritable until P5 locks it."></figure>
     </div>
     <div class="step-text">
       <p class="step-k"><span class="tag">P4</span>Can be written again until P5</p>
       <h3 class="step-title">Zeros and the record</h3>
-      <p>Zeros into slots 1–15, in 32-byte writes: before the data lock, the chip refuses 4-byte writes into
+      <p>Planned, not in the image yet: first a name for the key, up to 16 characters, or none. Then zeros into slots 1–15, in 32-byte writes: before the data lock, the chip refuses 4-byte writes into
         secret slots. <a href="#record">The record</a> into OTP. The screen shows the data CRC.</p>
       <dl>
         <dt>Checks</dt><dd>Each write is accepted. P5's CRC checks what they wrote.</dd>
+        <dt>The name</dt><dd>Goes into the record and is frozen at P5. The signer shows it beside the serial, so
+          you know which key is in. Anyone holding the key can read it: a colour or a number, not whose it is.</dd>
       </dl>
     </div>
   </article>
@@ -310,7 +370,7 @@
         <li>the serial, the revision and the factory config</li>
         <li>the config CRC and the data CRC</li>
         <li>the public key and the Safe signer address</li>
-        <li>counter 0 after each step</li>
+        <li>counter 0 after each step, and on the key's sticker</li>
         <li>the ceremony image's commit and SHA-256</li>
       </ul>
       <p>Nothing in it is secret. There is no seed phrase and no backup: lose the chip, and the Safe's other
@@ -354,7 +414,7 @@ sha256 36da855657a3ee7e098f27cd17b2a636c9e51adec02d252ee0adbe905b8113e1</pre>
       <h4>The record, in OTP</h4>
       <p>64 bytes, written at P4 and frozen by P5: <code>DK</code>, the layout and table versions, the serial,
         the revision, the config CRC, the ceremony image's commit, who prepared it (its owner, or a diykey
-        bench), and for a branded chip its number and the brand key's id.</p>
+        bench), for a branded chip its number and the brand key's id, the board, and the key's name.</p>
       <p>It holds no key, because there is no key yet when it's frozen. The signer always reads the live key.</p>
     </div>
     <div class="card">
@@ -367,6 +427,9 @@ sha256 36da855657a3ee7e098f27cd17b2a636c9e51adec02d252ee0adbe905b8113e1</pre>
         <li><b>Its own firmware image.</b> The write, lock and key commands live in a ceremony image. The
           signer keeps read commands, plus Sign.</li>
         <li><b>The chip says where you are.</b> Each step comes from the chip's state, so a restart resumes.</li>
+        <li><b>The serial again before every change.</b> A key-c unplugs, and nothing on the Cardputer sees it go.</li>
+        <li><b>The key alone can sign.</b> The Cardputer holds the rule, not the chip. Not chosen: pairing a
+          key to its Cardputer, whose flash anyone with the cable can read.</li>
       </ul>
     </div>
   </div>
@@ -466,8 +529,8 @@ sha256 36da855657a3ee7e098f27cd17b2a636c9e51adec02d252ee0adbe905b8113e1</pre>
     </li>
   </ol>
   <div class="cards">
-    <div class="card"><h4>Not run yet: a 608B</h4><p>Adafruit doesn't say which part the 4314 carries now. P1
-      refuses revision <code>00006003</code> until a spare 608B has been through.</p></div>
+    <div class="card"><h4>Not run yet: a 608C or a 608B</h4><p>Microchip says both take the same table. The image
+      refuses both for now. Key-c 1 settles the 608C, once P1 has its red page.</p></div>
     <div class="card"><h4>Not run yet: the Cardputer</h4><p>Everything above ran from MicroPython on a Pico. The
       Rust image's commands, its waits and the chip's power through the AMS1117 are new. A spare settles them.</p></div>
     <div class="card"><h4>Left untested: PrivWrite</h4><p>After the data lock it should be refused. Testing it
@@ -489,13 +552,16 @@ sha256 36da855657a3ee7e098f27cd17b2a636c9e51adec02d252ee0adbe905b8113e1</pre>
     <li class="done"><b>The address on the Cardputer</b>, checked against <code>vectors/webauthn.json</code>.</li>
     <li class="done"><b>This site</b>: the ceremony image beside the signer's, with its SHA-256; the log, checked and
       saved. Not yet: the rehearsal in the browser.</li>
-    <li><b>A spare chip</b> through P1 to K4, written up in the build log.</li>
-    <li><b>The first real key</b>: the fresh chip on my bench, serial <code>01233859…</code>.</li>
+    <li><b>The key-c in the ceremony image</b>: the red page for a 608C, the serial read again before each
+      change, the name.</li>
+    <li><b>Key-c 1</b> through P1 to K4, written up in the build log.</li>
+    <li><b>The first real keys</b>: key-c 2 and 3. Then <a href="#drill">the drill</a>, with key-c 4.</li>
   </ol>
   <div class="buy">
     <div>
       <h4>Before you buy</h4>
-      <p>A Cardputer v1.1, two ATECC608 breakouts (one is the spare), an AMS1117-3.3 module and a Grove cable:
+      <p>A Cardputer v1.1, two ATECC608 breakouts (one is the spare) or key-c boards, an AMS1117-3.3 module and a
+        Grove cable:
         <a href="https://github.com/jmcpheron/diykey/blob/main/hardware/README.md#shopping-list">the shopping list</a>.</p>
     </div>
     <p class="warn-box"><b>Not the Cardputer-Adv.</b> The v1.1 is being discontinued, and its successor reads its

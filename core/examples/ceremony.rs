@@ -4,9 +4,9 @@
 //! A rehearsal: the ceremony image's own pages (`ceremony_pages`), run on a virtual chip
 //! (`common/vchip.rs`, serial 0123 4a7b 9c2d 5e6f ee, a 608A) from P1 to K4, and drawn on the way.
 //! The key is the virtual chip's, made with the p256 crate. Its log goes to ceremony-rehearsal.txt,
-//! which web/test.mjs checks the way the page checks a real chip's. The brand pages are mockups:
-//! no firmware draws them.
-use signer_core::ceremony_pages::{check, header, keys, Ceremony, Key, Page, HOLD_MS};
+//! which web/test.mjs checks the way the page checks a real chip's. The brand pages and the key-c
+//! pages (a 608C's red page, the key's name) are mockups: no firmware draws them.
+use signer_core::ceremony_pages::{check, header, hold, keys, Ceremony, Key, Page, HOLD_MS};
 use signer_core::font::{self, Face};
 use signer_core::gfx::{theme::*, Frame, Rgb};
 use signer_core::hex;
@@ -20,8 +20,11 @@ mod vchip;
 use vchip::VChip;
 
 const M: i32 = 6;
+const R: i32 = W - M;
 const TW: i32 = W - 2 * M;
 const FOOT: i32 = 117;
+/// The key-c mockups' name for the key (docs/CEREMONY.md, "Its name").
+const NAME: &str = "key 2 blue";
 
 /// The virtual chip with the device's pages in front of it, and a clock.
 struct Run {
@@ -131,6 +134,28 @@ fn main() {
     std::fs::write(&path, &r.log).unwrap();
     println!("{path}");
 
+    // ------------------------------------------------------------------------- a key-c
+    save("p1-new", &|f| {
+        header(f, "P1", "Not tried yet", "Spare only");
+        f.text("Not tried on a 608C yet.", M, 22, Face::Bold14, TEXT, BG);
+        para(f, "Its rules should be a 608A's. Go on only with a spare you can lose.",
+             M, 41, TW, Face::Sans12, MUTED);
+        gate(f, "5e6f");
+        keys(f, Some(("Del", "Cancel")), None);
+        hold(f, 50);
+    });
+    save("p4-name", &|f| {
+        header(f, "P4", "Its name", "Part 1 of 2");
+        f.text("A name for this key", M, 22, Face::Bold14, TEXT, BG);
+        f.rrect(M, 42, TW, 24, 4, RAISED);
+        let end = f.text(NAME, M + 6, 45, Face::Mono13, TEXT, RAISED);
+        f.rrect(end + 1, 46, 2, 16, 1, TEXT);
+        f.text_r("10 / 16", R - 6, 47, Face::Sans12, FAINT, RAISED);
+        para(f, "Shown beside its serial. Anyone holding the key can read it. Frozen at P5.",
+             M, 74, TW, Face::Sans12, MUTED);
+        keys(f, Some(("Del", "No name")), Some(("Enter", "Next", RAISED, TEXT)));
+    });
+
     // ------------------------------------------------------------------------- a branded key
     let brand_seed = hex_of(&vchip::SERIAL) + "0042";
     save("brand", &|f| {
@@ -181,6 +206,23 @@ fn para(f: &mut Frame, s: &str, x: i32, y: i32, w: i32, face: Face, fg: Rgb) -> 
         y += pitch;
     }
     y
+}
+
+/// The serial gate, as the ceremony's red pages draw it, with `typed` in its boxes.
+fn gate(f: &mut Frame, typed: &str) {
+    f.text("Type the serial's last four", M, 72, Face::Sans12, MUTED, BG);
+    let t: Vec<char> = typed.chars().collect();
+    for i in 0..4 {
+        let x = M + i * 22;
+        f.rrect(x, 89, 19, 21, 4, if i < t.len() as i32 { RAISED } else { LINE });
+        if let Some(c) = t.get(i as usize) {
+            let mut s = [0u8; 4];
+            let s = c.encode_utf8(&mut s);
+            let w = font::get(Face::Mono13).width(s);
+            f.text(s, x + (19 - w) / 2, 90, Face::Mono13, TEXT, RAISED);
+        }
+    }
+    f.text("from its sticker", M + 4 * 22 + 4, 92, Face::Sans12, FAINT, BG);
 }
 
 fn hex_of(b: &[u8]) -> String {

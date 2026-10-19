@@ -276,9 +276,14 @@ pub fn idle(f: &mut Frame, chip: &Chip, last: Option<&str>) {
             let model = match c.revision[2..] {
                 [0x60, 0x02] => "ATECC608A",
                 [0x60, 0x03] => "ATECC608B",
+                [0x60, 0x05] => "ATECC608C",
                 _ => "ATECC608?",
             };
             f.text(model, M + 32, 23, Face::Bold14, TEXT, BG);
+            // counter 0, to check against the number on the key's sticker (docs/CEREMONY.md)
+            let mut n: Buf<20> = Buf::new();
+            let _ = write!(n, "counter {}", c.counter0);
+            f.text_r(n.as_str(), R, 25, Face::Sans12, FAINT, BG);
             let mut g: Buf<24> = Buf::new();
             for (i, ch) in s.chars().enumerate() {
                 if i > 0 && i % 4 == 0 {

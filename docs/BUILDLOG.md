@@ -136,6 +136,37 @@ Checked on the laptop, not on a chip:
 
 Not checked: anything on a Cardputer or a chip. Next is a spare chip from P1 to K4.
 
+## 2026-10-19: a tune as a second factor, an experiment
+
+A third image, `hum` ([HUM.md](HUM.md)). The Cardputer plays the first notes of a common tune on
+its speaker, you hum or whistle your own ending into its mic, and it shows the code it heard: which
+way each note moves, by a step or a leap, and which notes are long. A tune is set with three goes
+that come out the same, then tried. It never wakes the chip, signs nothing, and keeps the tune in
+RAM only. The speaker is I2S1; the mic is I2S0 in PDM mode, through the S3's PDM-to-PCM filter.
+They share G43, so it plays, then listens.
+
+Checked on the laptop, not on a Cardputer:
+- `cargo test`:
+  - the pitch of tones and hums from 80 Hz to 3 kHz, within a tenth of a semitone
+  - the device's own openings heard back note for note
+  - a test tune giving the same code in other keys, at other speeds, a little off, with vibrato,
+    glides and noise, and whistled two octaves up
+  - another tune giving another code
+  - the pages from end to end
+- A sweep of 300 random takes ([HUM.md](HUM.md#what-was-checked-and-how)): 2 came out different
+  with each note within ±0.2 semitones and ±25 ms, and 49 with ±0.3 semitones.
+- The image builds (245 KB) with a hand-installed esp toolchain: rust 1.97.0.0 and GCC
+  esp-15.2.0_20250920. espup couldn't reach GitHub's API from here.
+- Clippy passes on all three images.
+- `web/build.sh`, `node web/test.mjs` and `node web/e2e.mjs` pass, the last in Chromium 141.
+
+Adding `hum` to `core` changed the signer's and the ceremony's images (`bf052fd9…`, `f9f9b403…`
+with this toolchain): code layout, not code. Their source didn't change, and all 91 of their screens
+came out the same, byte for byte. The board didn't need flashing.
+
+Not checked: the speaker, the mic, which PDM slot the mic is on, how loud it reads, and whether
+the analysis keeps up on the S3. That is the first thing to do on the bench.
+
 ## Next
 
 - Milestone 3: hold to sign with the chip, over the hash the device worked out.

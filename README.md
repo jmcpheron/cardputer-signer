@@ -90,6 +90,7 @@ Every crate is pinned exactly in `Cargo.toml`, and `Cargo.lock` pins each one by
 ```sh
 cd firmware && cargo run --release      # espflash flash --monitor --chip esp32s3
 cd firmware && cargo run --release --bin ceremony   # the key ceremony instead (docs/CEREMONY.md)
+cd firmware && cargo run --release --bin hum        # a tune as a second factor, an experiment (docs/HUM.md)
 ```
 
 ### Send it a transaction
@@ -154,15 +155,15 @@ Where the vectors come from: [vectors/SOURCE.md](vectors/SOURCE.md).
 
 | path | what |
 |---|---|
-| `core/` | everything that isn't hardware, `no_std` and no heap: the Safe hash, the ATECC608's packets (`atecc.rs`, read commands only), blockies, the fonts, a framebuffer and the screens; and the key ceremony's commands, steps and pages (`ceremony*.rs`), which only the ceremony image uses. It runs on the laptop, and its tests run the ceremony on a virtual chip. |
-| `firmware/` | the Cardputer: the panel (SPI), the chip (I2C), the keyboard, lines over USB (`src/lib.rs`). Two images: the signer (`src/bin/main.rs`) and the key ceremony (`src/bin/ceremony.rs`). They draw with `core`. |
+| `core/` | everything that isn't hardware, `no_std` and no heap: the Safe hash, the ATECC608's packets (`atecc.rs`, read commands only), blockies, the fonts, a framebuffer and the screens; the key ceremony's commands, steps and pages (`ceremony*.rs`), which only the ceremony image uses; and the hum experiment's listening and pages (`hum*.rs`), which only the hum image uses. It runs on the laptop, and its tests run the ceremony on a virtual chip. |
+| `firmware/` | the Cardputer: the panel (SPI), the chip (I2C), the keyboard, lines over USB (`src/lib.rs`). Three images: the signer (`src/bin/main.rs`), the key ceremony (`src/bin/ceremony.rs`), and the hum experiment (`src/bin/hum.rs`), which plays on the speaker and listens on the mic. They draw with `core`. |
 | `host/send.py` | sends a transaction from the computer and prints what the device says |
 | `web/` | the page at diykey.app: the emulator, the Cardputer over USB, flashing either image, and checking the key ceremony's log; and the key ceremony's page |
 | `wasm/` | the emulator: `core` in WebAssembly, the firmware's states, a passkey as its key |
 | `vectors/` | test vectors from outside this code |
 | `fonts/` | Atkinson Hyperlegible Next and Mono as 4-bit bitmaps (SIL OFL 1.1, `fonts/OFL.txt`) |
 | `hardware/` | the parts, the wiring diagram, and later a case |
-| `docs/` | the build log, the key ceremony, and the screen previews above |
+| `docs/` | the build log, the key ceremony, the hum experiment, and the screen previews above |
 
 ## Where it comes from
 

@@ -12,6 +12,8 @@ pub mod decode;
 pub mod font;
 pub mod gfx;
 pub mod hex;
+pub mod hum;
+pub mod hum_pages;
 pub mod keys;
 pub mod num;
 pub mod proto;
